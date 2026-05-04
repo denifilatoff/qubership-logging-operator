@@ -68,7 +68,7 @@ OpenShift 4.x is built on Kubernetes and regularly integrates new Kubernetes rel
 Therefore, its compatibility can be tracked by the underlying Kubernetes version.
 To determine which Kubernetes version a specific OpenShift release uses, refer to its release notes.
 For example, `OpenShift 4.12` is based on `Kubernetes v1.25.0`,
-see the [Release notes](https://docs.openshift.com/container-platform/4.12/release_notes/ocp-4-12-release-notes.html).
+see the [Release notes](https://docs.redhat.com/en/documentation/openshift_container_platform/4.12/html/release_notes/ocp-4-12-release-notes).
 
 ### Public Cloud Provider Support
 
