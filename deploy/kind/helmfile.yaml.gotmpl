@@ -60,6 +60,10 @@ releases:
         showlogs: true
         command: "bash"
         args: ["./hooks/install-vlsingle.sh"]
+      - events: ["preuninstall"]
+        showlogs: true
+        command: "bash"
+        args: ["./hooks/uninstall-vlsingle.sh"]
 
   # ── Logging operator (both backends, values vary) ──────────────────────────
   - name: qubership-logging-operator
