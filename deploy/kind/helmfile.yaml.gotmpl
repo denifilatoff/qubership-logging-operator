@@ -1,0 +1,93 @@
+# Brings up the full logging stack on a local kind cluster.
+# Backend selection via BACKEND env: "graylog" or "victorialogs".
+#
+# CLUSTER_NAME is required and pins helm to context "kind-${CLUSTER_NAME}" —
+# helmfile will refuse to apply against anything else.
+#
+# Usage:
+#   cp deploy/kind/.env.example deploy/kind/.env   # then edit
+#   set -a && source deploy/kind/.env && set +a
+#   helmfile -f deploy/kind/helmfile.yaml apply
+
+helmDefaults:
+  kubeContext: kind-{{ requiredEnv "CLUSTER_NAME" }}
+
+repositories:
+  - name: vm
+    url: https://victoriametrics.github.io/helm-charts/
+
+hooks:
+  - events: ["prepare"]
+    showlogs: true
+    command: "bash"
+    args: ["-c", "./hooks/prepare-node.sh && ./hooks/apply-monitoring-crds.sh"]
+
+{{- $backend := requiredEnv "BACKEND" }}
+{{- if and (ne $backend "graylog") (ne $backend "victorialogs") }}
+  {{- fail (printf "BACKEND must be 'graylog' or 'victorialogs', got %q" $backend) }}
+{{- end }}
+
+releases:
+  # ── Graylog backend ────────────────────────────────────────────────────────
+  - name: opensearch
+    namespace: opensearch
+    createNamespace: true
+    condition: backend.graylog.enabled
+    chart: https://github.com/Netcracker/qubership-opensearch/releases/download/{{ env "OPENSEARCH_VERSION" | default "2.3.0" }}/opensearch-{{ env "OPENSEARCH_VERSION" | default "2.3.0" }}.tgz
+    values:
+      - values-opensearch.yaml
+      - opensearch:
+          master:
+            persistence:
+              storageClass: {{ env "STORAGE_CLASS" | default "standard" }}
+    wait: true
+    waitForJobs: true
+    timeout: 1800
+
+  # ── VictoriaLogs backend ───────────────────────────────────────────────────
+  - name: vmo
+    namespace: logging
+    createNamespace: true
+    condition: backend.victorialogs.enabled
+    chart: vm/victoria-metrics-operator
+    {{- with env "VM_OPERATOR_VERSION" }}
+    version: {{ . }}
+    {{- end }}
+    wait: true
+    timeout: 600
+    hooks:
+      - events: ["postsync"]
+        showlogs: true
+        command: "bash"
+        args: ["./hooks/install-vlsingle.sh"]
+
+  # ── Logging operator (both backends, values vary) ──────────────────────────
+  - name: qubership-logging-operator
+    namespace: logging
+    createNamespace: true
+    chart: ../../charts/qubership-logging-operator
+    needs:
+      {{- if eq $backend "graylog" }}
+      - opensearch/opensearch
+      {{- else }}
+      - logging/vmo
+      {{- end }}
+    values:
+      - values-logging-{{ $backend }}.yaml
+      {{- if eq $backend "graylog" }}
+      - graylog:
+          mongoStorageClassName: {{ env "STORAGE_CLASS" | default "standard" }}
+          graylogStorageClassName: {{ env "STORAGE_CLASS" | default "standard" }}
+      {{- end }}
+    # The chart's LoggingService CR has no Ready status condition, so helm's
+    # --wait blocks until timeout. Skip it — Deployment/DaemonSet rollouts are
+    # the meaningful readiness signal.
+    wait: false
+    timeout: 1800
+
+values:
+  - backend:
+      graylog:
+        enabled: {{ eq $backend "graylog" }}
+      victorialogs:
+        enabled: {{ eq $backend "victorialogs" }}

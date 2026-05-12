@@ -1,0 +1,24 @@
+# Aligned with .github/workflows/integration-tests.yml (victorialogs scenario)
+containerRuntimeType: containerd
+
+cloudEventsReader:
+  install: true
+  dockerImage: ghcr.io/netcracker/qubership-kube-events-reader:main
+
+fluentbit:
+  install: true
+  containerLogging: true
+  graylogOutput: false
+  output:
+    http:
+      enabled: true
+      # vlsingle-<name>.<namespace> — name fixed to "k8s" in manifests/vlsingle.yaml
+      host: vlsingle-k8s.logging
+      port: 9428
+      auth:
+        credentials:
+          username: admin
+          password: admin
+
+fluentd:
+  install: false
