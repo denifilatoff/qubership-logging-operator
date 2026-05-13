@@ -89,6 +89,22 @@ releases:
     wait: false
     timeout: 1800
 
+  # ── Log generator (required for both backends — produces test traffic) ─────
+  # Writes the full set of preset patterns (java/go/json/nginx/glusterd/unicode
+  # /spring/zipkin) to stdout at 5 msg/sec each with multiline enabled. The
+  # cluster's fluentbit daemonset picks it up from /var/log/containers and
+  # ships it to the active backend.
+  - name: qubership-log-generator
+    namespace: log-generator
+    createNamespace: true
+    chart: ../../../qubership-log-generator/charts/qubership-log-generator
+    needs:
+      - logging/qubership-logging-operator
+    values:
+      - values-log-generator.yaml
+    wait: true
+    timeout: 600
+
 values:
   - backend:
       graylog:

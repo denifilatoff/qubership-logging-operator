@@ -1,0 +1,292 @@
+# Self-contained overrides for qubership-log-generator on the kind stack.
+# This file is the single source of truth for the generator's runtime config —
+# the sibling chart's values.yaml is left at its upstream defaults.
+#
+# What this preset does:
+# - Activates ALL built-in pattern families (java/go/json/nginx/glusterd/
+#   unicode/spring/zipkin) under *_low names defined in customConfig below.
+#   Built-in names are deliberately not listed in `templates:` so their
+#   default 1000 msg/sec rates don't fire alongside our slowed-down copies.
+# - 5 msg/sec per template variant. With go (4) and unicode (3) having
+#   multiple sub-variants, total throughput is ~70 msg/sec.
+# - Multiline enabled (probability 0.3) — only java/go-3rd/glusterd/unicode
+#   have multiline blocks, so others produce single lines.
+# - generationTime 3600 s = 1 hour per template, after which the threads exit
+#   (pod stays Running, just stops emitting).
+# - Ingress disabled — kind doesn't ship an ingress controller and the
+#   generator's UI is not needed for ingestion testing.
+
+ingress:
+  enabled: false
+
+# The chart's dashboard.yaml uses the legacy integreatly.org/v1alpha1 API
+# while the cluster ships grafana.integreatly.org. We don't need the
+# dashboard for ingestion testing — disable it to keep helm render happy.
+monitoring:
+  metricsEnabled: true
+  dashboardEnabled: false
+
+multiline:
+  enabled: true
+  probability: 0.3
+
+# Global fallback for any template that doesn't set its own messagesPerSec.
+# All entries below DO set it explicitly, so this is just a safety net.
+messagesPerSec: 5
+generationTime: 3600
+
+templates:
+  - "java_low"
+  - "go_low"
+  - "json_low"
+  - "nginx_low"
+  - "glusterd_low"
+  - "unicode_low"
+  - "springLogo_low"
+  - "zipkinLogo_low"
+
+customConfig:
+  config:
+    # ----- java -----
+    - name: "java_low"
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: "yyyy-MM-dd HH:mm:ss,SSS"
+      template: "[${level}] ${package}.${class}: ${explanation};"
+      fields:
+        level: [INFO, WARN, ERROR]
+        package:
+          - com.nc.application.generator
+          - com.nc.application.executor
+          - com.nc.application.provider
+        class:
+          - InterruptedqubershipException
+          - BadException
+          - ArrayIndexOutOfBoundsException
+        explanation:
+          - clean channel shutdown
+          - socket closed
+          - connection refused
+      multiline:
+        - template: "\tat com.example.app.${class}.${method}(${class}.java:${line})"
+          fields:
+            class: [LalaTest, GoodTest, BadTest]
+            method: [getIndex, setValue, isAvailable]
+            line: ["5", "7", "14"]
+        - template: "${method} request ${address}:6300/${path} : SUCCESS"
+          fields:
+            method: [GET, POST]
+            path: [api/leads, api/customers, api/orders]
+            address: ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+
+    # ----- go: 4 sub-variants -----
+    - name: "go_low"
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: "[yyyy-MM-dd'T'HH:mm:ss,SSS'Z']"
+      template: "/go/pkg/mod/example.com/${package}:${line}: ${message}"
+      fields:
+        package:
+          - go-logr/zapr@v0.2.0/zapr.go
+          - local-app/lapp@v1.1.0/start.go
+          - qubership-rep/qubership@0.0.1/config.go
+        line: ["32", "5", "19", "57"]
+        message:
+          - Message successfully submitted
+          - Message successfully submitted with warnings
+          - Message successfully submitted to request url
+    - name: "go_low"
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: "[yyyy-MM-dd'T'HH:mm:ss,SSS'Z']"
+      template: "[${level}][caller=${class}.go][msg=\"${message}\"]"
+      fields:
+        class: [tls_config, node_exporter, filesystem_common]
+        level: [info, warn]
+        message:
+          - Build context
+          - Parsed flag --collector.filesystem.fs-types-exclude
+          - Enabled collectors
+    - name: "go_low"
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: "[yyyy-MM-dd'T'HH:mm:ss,SSS'Z']"
+      template: "${level} ${dashboard} failed to request dashboard url, falling back to config map; if specified {\"error\": \"request failed with status 404\"}"
+      fields:
+        level: [WARN, ERROR]
+        dashboard:
+          - qubership-dashboard
+          - qubership-node-exporter-dashboard
+          - qubership-kube-overview-dashborad
+      multiline:
+        - template: "qubership-repository.com/grafana-operator/grafana-operator/v4/controllers/grafanadashboard.(*${class}).${method}"
+          fields:
+            class: [DashboardPipelineImpl, GrafanaDashboardReconciler, SetupWithManager]
+            method: [obtainJson, ProcessDashboard, reconcileDashboards, Reconcile]
+        - template: "/workspace/controllers/grafanadashboard/${class}.go:${line}"
+          fields:
+            class:
+              - dashboard_pipeline
+              - grafanadashboard_controller
+              - grafana_reconciler
+              - datasource_controller
+            line: ["176", "108", "56", "37"]
+    - name: "go_low"
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: "'I'0622 HH:mm:ss,SSSSSS"
+      template: "1 ${class}.go:645] (from=qubership-log-generator) Throttling request took 1.045883302s, request: GET:https://${address}:443/apis/qubership.org/${version}?timeout=32s"
+      fields:
+        class: [warnings, request]
+        address: ["10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.4"]
+        version: [v9, v10, v11]
+
+    # ----- json -----
+    - name: "json_low"
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: "{\"'lvl'\":\"'INFO'\",\"'ts'\":\"yyyy-MM-dd'T'HH:mm:ss,SSS\""
+      template: ",\"logger\":\"${logger}\",\"msg\":\"${message}\",\"from\":\"qubership-log-generator\"}"
+      fields:
+        logger:
+          - qubership_operator_reconciler
+          - qubership_etcd_monitor_reconciler
+          - qubership_kubernetes_monitors_reconciler
+          - qubership_nodeexporter_reconciler
+        message:
+          - Reconciling component
+          - Reconciliation started
+          - Uninstalling component if exists
+
+    # ----- nginx: 2 sub-variants -----
+    - name: "nginx_low"
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: "'I'0622 HH:mm:ss,SSSSSS"
+      template: "8 event.go:282] Event(v1.ObjectReference{Kind:\"Ingress\", Namespace:\"${namespace}\", Name:\"${service}\", UID:\"3b976065-9838-4a7e-912a-c5820a2b7e6a\", APIVersion:\"networking.k8s.io/v1beta1\", ResourceVersion:\"228573236\", FieldPath:\"\"}): type: 'Normal' reason: 'Sync' Scheduled for sync"
+      fields:
+        namespace: [qubership-ns1, qubership-ns2, qubership-ns3, qubership-ns4]
+        service:
+          - qubership-airflow-manager
+          - qubership-ha-test
+          - qubership-prometheus-operator
+    - name: "nginx_low"
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: "'W'0622 HH:mm:ss,SSSSSS"
+      template: "8 controller.go:992] Service \"${namespace}/${service}\" does not have any active Endpoint."
+      fields:
+        namespace: [qubership-ns1, qubership-ns2, qubership-ns3, qubership-ns4]
+        service:
+          - qubership-airflow-manager
+          - qubership-ha-test
+          - qubership-prometheus-operator
+          - qubership-opensearch
+
+    # ----- glusterd -----
+    - name: "glusterd_low"
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: "[yyyy-MM-dd HH:mm:ss.SSSSSS]"
+      template: " ${letter} ${MSGID} [${source}] ${action}: ${message}"
+      fields:
+        letter: [W, I, E]
+        MSGID:
+          - "[MSGID: 106479]"
+          - "[MSGID: 1062379]"
+          - "[MSGID: 12179]"
+          - ""
+        source:
+          - "socket.c:1600:__socket_rwv"
+          - "rdma.c:4630:__gf_rdma_ctx_create"
+          - "glusterd-store.c:2241:glusterd_restore_op_version"
+          - "event-epoll.c:613:event_dispatch_epoll_worker"
+        action: [0-management, 0-pmap, 0-glusterd, 0-epoll]
+        message:
+          - readv on 10.0.0.1:24007 failed (No data available)
+          - Maximum allowed open file descriptors set to 65536
+          - Starting glustershd service
+          - "Received ACC from uuid: a53c44d1-b573-4d19-a561-c668a3438d38"
+          - "Detected new install. Setting op-version to maximum : 31202"
+          - Using /var/run/gluster as pid file working directory
+      multiline:
+        - template: "Final graph:\n
+            +------------------------------------------------------------------------------+\n
+            \  1: volume management\n
+            \  2:     type mgmt/glusterd\n
+            \  3:     option transport.listen-backlog ${number}\n
+            \  4:     option event-threads ${number}\n
+            \  5:     option ping-timeout ${number}\n
+            \  6: end-volume\n
+            +------------------------------------------------------------------------------+"
+          fields:
+            number: ["2", "10", "34", "1", "0"]
+
+    # ----- unicode: 3 alphabets -----
+    - name: "unicode_low"
+      # Arabic
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: "yyyy-MM-dd HH:mm:ss,SSS"
+      symbolRange: { from: 0x0600, to: 0x06FF }
+      wordLength: { from: 5, to: 10 }
+      logLength: { max: 100, min: 20 }
+      multiline:
+        - symbolRange: { from: 0x0600, to: 0x06FF }
+          wordLength: { from: 5, to: 10 }
+          logLength: { max: 100, min: 20 }
+    - name: "unicode_low"
+      # Cyrillic
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: "yyyy-MM-dd HH:mm:ss,SSS"
+      symbolRange: { from: 0x0400, to: 0x04FF }
+      wordLength: { from: 5, to: 10 }
+      logLength: { max: 100, min: 20 }
+      multiline:
+        - symbolRange: { from: 0x0400, to: 0x04FF }
+          wordLength: { from: 5, to: 10 }
+          logLength: { max: 100, min: 20 }
+    - name: "unicode_low"
+      # Hiragana
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: "yyyy-MM-dd HH:mm:ss,SSS"
+      symbolRange: { from: 0x3040, to: 0x309F }
+      wordLength: { from: 5, to: 10 }
+      logLength: { max: 100, min: 20 }
+      multiline:
+        - symbolRange: { from: 0x3040, to: 0x309F }
+          wordLength: { from: 5, to: 10 }
+          logLength: { max: 100, min: 20 }
+
+    # ----- ASCII art banners -----
+    - name: "springLogo_low"
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: ""
+      template: "\n\n
+                \ \ .   ____          _            __ _ _\n
+                \ /\\\\ / ___'_ __ _ _(_)_ __  __ _ \\ \\ \\ \\\n
+                ( ( )\\___ | '_ | '_| | '_ \\/ _` | \\ \\ \\ \\\n
+                \ \\\\/  ___)| |_)| | | | | || (_| |  ) ) ) )\n
+                \ \ '  |____| .__|_| |_|_| |_\\__, | / / / /\n
+                \ =========|_|==============|___/=/_/_/_/\n
+                \ :: Spring Boot ::                (v${version})\n"
+      fields:
+        version: [2.7.4, 2.2.8, 6.6.6]
+    - name: "zipkinLogo_low"
+      messagesPerSec: 5
+      generationTime: 3600
+      dateFormat: ""
+      template: "\n\n
+                \     ________ ____  _  _____ _   _\n
+                \    |__  /_ _|  _ \\| |/ /_ _| \\ | |\n
+                \      / / | || |_) | ' / | ||  \\| |\n
+                \     / /_ | ||  __/| . \\ | || |\\  |\n
+                \    |____|___|_|   |_|\\_\\___|_| \\_|\n
+                \n
+                :: version ${version} :: commit ${commit} ::\n\n"
+      fields:
+        version: [2.7.4, 2.2.8, 6.6.6]
+        commit: [24787e213c, 34i32uiuwe, 8wed324iud]

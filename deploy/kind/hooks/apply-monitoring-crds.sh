@@ -4,7 +4,11 @@ set -euo pipefail
 # qubership-logging-operator chart renders ServiceMonitor / PodMonitor /
 # PrometheusRule / GrafanaDashboard. Without these CRDs helm install fails.
 # Skip any CRD that's already installed — don't overwrite a foreign version.
-BASE="https://raw.githubusercontent.com/Netcracker/qubership-monitoring-operator/refs/heads/main/charts/qubership-monitoring-operator/charts"
+# Pinned to the commit before grafana-operator 4.x→5.x (c61cc8e, 2026-05-12),
+# which renamed the GrafanaDashboard group from integreatly.org to
+# grafana.integreatly.org. Charts in this repo (and qubership-log-generator)
+# still reference the old group, so we install the pre-rename CRDs.
+BASE="https://raw.githubusercontent.com/Netcracker/qubership-monitoring-operator/2c0cf2537b/charts/qubership-monitoring-operator/charts"
 
 apply_if_missing() {
   local name="$1" url="$2"
