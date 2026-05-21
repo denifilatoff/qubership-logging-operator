@@ -1,0 +1,1 @@
+../../../../../../docs/troubleshooting/opensearch.md

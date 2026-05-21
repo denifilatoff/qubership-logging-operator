@@ -1,0 +1,11 @@
+name: qubership-logging-operator
+version: 1.0.0
+description: APM project for qubership-logging-operator
+author: Denis Filatov
+dependencies:
+  apm: []
+  mcp: []
+scripts: {}
+devDependencies:
+  apm:
+  - Netcracker/qubership-ai-packages/agent-packages/apm-authoring

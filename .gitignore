@@ -22,3 +22,7 @@ site/
 
 # Local deploy env files
 deploy/**/.env
+
+
+# APM dependencies
+apm_modules/

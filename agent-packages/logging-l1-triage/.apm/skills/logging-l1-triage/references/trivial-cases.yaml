@@ -1,0 +1,177 @@
+# trivial-cases.yaml
+#
+# Knowledge base for the logging-l1-triage skill's recommend_resolve path.
+#
+# Each entry has:
+#   id              short kebab-case identifier (stable; referenced from
+#                   the skill output as trivial_case_id)
+#   trigger         one or more phrases / patterns observed in the ticket
+#                   body, error text, or attached logs that select this
+#                   case. Match is by case-insensitive substring unless
+#                   the trigger is explicitly marked as a regex.
+#   knowledge_area  slug of the area that owns the underlying topic
+#                   (see references/knowledge-areas.md). Used in the L2
+#                   handoff if the operator decides to escalate instead
+#                   of resolve.
+#   response        canonical answer drafted for the ticket author.
+#                   May reference {{placeholders}} for installation-
+#                   specific paths so the entry remains portable.
+#   recommended_ticket_action  what to do with the ticket after the
+#                   operator has read the response. Always advisory.
+#   runbook_section  anchor in the upstream troubleshooting.md.
+#   notes           caveats the operator should read before approving.
+#
+# A case is only "trivial" when:
+#   * the trigger maps unambiguously to a single root cause,
+#   * the recommended action has no destructive side effects, AND
+#   * the resolution does not depend on inspecting live runtime state.
+# If any of those break, the skill must escalate instead of matching.
+
+version: 1
+
+cases:
+  - id: ism-config-cosmetic
+    trigger:
+      - "IndexNotFoundException [.opendistro-ism-config]"
+    knowledge_area: opensearch
+    response: |
+      This is a cosmetic bug in the OpenSearch index-management plugin
+      prior to 2.10.0.0 — the message is logged at ERROR level but
+      should be at DEBUG. There is no functional impact and no data
+      loss. You can either ignore the line in the log, or create any
+      ISM policy (even an empty one) which makes the index appear and
+      silences the warning.
+    recommended_ticket_action: close_as_resolved
+    runbook_section: "troubleshooting.md#errors-no-such-index-opendistro-ism-config"
+
+  - id: timestamp-tz-mismatch
+    trigger:
+      - "different times in message and timestamp"
+      - "time mismatch between message and timestamp"
+      - "log time in message differs from time field"
+    knowledge_area: graylog-server
+    response: |
+      This is not a logging defect. The Graylog UI displays the
+      `timestamp` field in the viewer's timezone, while the text inside
+      `message` carries whatever timezone the source application
+      printed. Two ways to make them line up:
+        - Set the node timezone to UTC so applications log in UTC, or
+        - Change the Graylog user's display timezone — this only
+          affects how the `timestamp` field is rendered; it never
+          modifies the contents of `message`.
+    recommended_ticket_action: close_as_resolved
+    notes: |
+      If the author insists the `message` text itself is being
+      rewritten, the case is not trivial — escalate to
+      `graylog-server`.
+
+  - id: deflector-exists-as-index
+    trigger:
+      - "Deflector exists as an index and is not an alias"
+    knowledge_area: graylog-server
+    response: |
+      The `_deflector` suffix is reserved by Graylog. An index with
+      that suffix was created (usually because Graylog inputs were
+      not stopped during an upgrade), so the alias cannot be
+      attached. Resolution: delete the offending index. For future
+      upgrades, stop the Graylog inputs first so this does not recur.
+    recommended_ticket_action: close_as_resolved
+    notes: |
+      If the operator cannot confirm which index is offending, or if
+      there is a risk of losing logs by deleting the wrong index,
+      escalate to `graylog-server` instead.
+
+  - id: fields-limit-1000-exceeded
+    trigger:
+      - "Limit of total fields [1000] in index has been exceeded"
+    knowledge_area: opensearch
+    response: |
+      Known bug in older versions of Logging — the FluentBit / FluentD
+      parser extracts noise `key=value` pairs that explode the mapping
+      until the per-index field limit is hit. Resolution: upgrade
+      Logging to a version with the fixed parser. The accumulated
+      noise fields can be cleaned with the painless script documented
+      in the runbook section below.
+    recommended_ticket_action: close_as_resolved
+    runbook_section: "troubleshooting.md#limit-of-total-fields-exceeded"
+
+  - id: dr-no-vip-cyclic-redirect
+    trigger:
+      - "cyclic redirect"
+      - "redirect loop on Graylog UI"
+    knowledge_area: graylog-server
+    response: |
+      Known case for the DR no-vIP topology with Load Balancer + HTTPS
+      termination. The Graylog UI is reachable only when SNI
+      passthrough is configured for the Graylog route on the LBs. Add
+      the Graylog Route URL to `os_sni_passthrough.map` on the Load
+      Balancers and retry.
+    recommended_ticket_action: route_to_lb_team_then_close
+    notes: |
+      Pure DR-no-vIP topology. If the installation uses a vIP or a
+      different LB product, escalate to `graylog-server` instead
+      (mention `l7-routing` as a cross-cutting hint).
+
+  - id: index-read-only-after-disk-cleanup
+    trigger:
+      - "index.blocks.read_only_allow_delete"
+      - "FORBIDDEN/12/index read-only"
+    knowledge_area: graylog-server
+    response: |
+      Once the disk has been freed, the read-only flag must be
+      cleared explicitly — OpenSearch does not lift it automatically.
+      Run, against the OpenSearch endpoint:
+
+          curl -X PUT -H 'Content-Type: application/json' \
+               -d '{"index.blocks.read_only_allow_delete": null}' \
+               '{{ opensearch_url }}/_all/_settings'
+
+      Then review the rotation policy: the combined target size of
+      all index sets should stay under 85 % of the data disk so this
+      does not recur.
+    recommended_ticket_action: close_as_resolved
+    notes: |
+      Only trivial when the author has confirmed the disk is now
+      below the watermark. If the disk is still full, escalate to
+      `graylog-server` to address the underlying capacity / rotation
+      issue.
+
+  - id: nodes-info-unavailable-tls
+    trigger:
+      - "Nodes info unavailable"
+      - "Nodes info unavailable" # also typical in screenshots
+    knowledge_area: graylog-server
+    response: |
+      Typically caused by an expired TLS certificate, or by a
+      certificate that lacks the required Subject Alternative Names
+      (commonly `graylog-service.<namespace>.svc` and equivalents).
+      Re-issue the certificate with the correct alt names and restart
+      the Graylog service so the new cert is loaded.
+    recommended_ticket_action: route_to_pki_or_sre_then_close
+    notes: |
+      Match only when the ticket explicitly mentions TLS, an expired
+      cert, or shows a cert error in a screenshot. The same UI
+      message can also be produced by an OpenSearch outage — that is
+      `opensearch`, not trivial.
+
+  - id: journal-negative-unprocessed
+    trigger:
+      - "negative number of unprocessed messages"
+      - "unprocessed messages: -"
+    knowledge_area: graylog-server
+    response: |
+      The Graylog journal directory was partially cleared while the
+      process kept its in-memory counters. Recovery:
+
+        1. Stop Graylog.
+        2. `rm -rf {{ graylog_volume }}/graylog/data/journal/*`
+        3. Start Graylog.
+
+      In-flight messages that were already in the journal at the
+      time of the partial cleanup are lost; messages still buffered
+      upstream (FluentD / FluentBit) will be re-delivered.
+    recommended_ticket_action: provide_procedure_then_close
+    notes: |
+      If the author has no SSH access on the Graylog VM, escalate
+      to `graylog-server` — the operator running the procedure needs
+      shell access.

@@ -1,0 +1,20 @@
+lockfile_version: '1'
+generated_at: '2026-05-15T09:32:15.299791+00:00'
+apm_version: 0.9.2
+dependencies:
+- repo_url: Netcracker/qubership-ai-packages
+  host: github.com
+  resolved_commit: 2ca2d172d959b9599948cabf5f9bdc27c527c2ba
+  virtual_path: agent-packages/apm-authoring
+  is_virtual: true
+  package_type: apm_package
+  deployed_files:
+  - .claude/rules/apm-authoring.md
+  - .claude/skills/apm-authoring
+  - .github/instructions/apm-authoring.instructions.md
+  - .github/skills/apm-authoring
+  deployed_file_hashes:
+    .claude/rules/apm-authoring.md: sha256:3fc3b252b0ae3001918e120e3fc44e5af0d9aa7c9fd9df26aada87c71510af76
+    .github/instructions/apm-authoring.instructions.md: sha256:ac85ce4a0ca9413541ef2e1fa4911d4c65881a270ef3bcd20e261b0a12c6dd1d
+  content_hash: sha256:ecfc8264d333acac6b8a2c0239c8da87243b798c26f876ff16e7eedcf71d9ba6
+  is_dev: true

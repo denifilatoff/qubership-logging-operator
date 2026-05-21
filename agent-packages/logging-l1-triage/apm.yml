@@ -1,0 +1,4 @@
+name: logging-l1-triage
+version: 0.1.0
+description: L1 triage and routing for Qubership logging-stack support tickets. Produces one of three structured outcomes (recommend_resolve / escalate / bounce_back) without touching live systems.
+author: Qubership
