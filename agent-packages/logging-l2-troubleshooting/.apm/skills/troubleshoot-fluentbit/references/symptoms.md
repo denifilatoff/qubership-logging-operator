@@ -1,1 +1,1 @@
-../../../../../../docs/troubleshooting/fluentbit.md
+../../../shared/symptoms/fluentbit.md

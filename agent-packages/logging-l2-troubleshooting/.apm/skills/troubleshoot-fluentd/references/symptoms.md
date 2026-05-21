@@ -1,1 +1,1 @@
-../../../../../../docs/troubleshooting/fluentd.md
+../../../shared/symptoms/fluentd.md

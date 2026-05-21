@@ -1,1 +1,1 @@
-../../../../../../docs/troubleshooting/graylog.md
+../../../shared/symptoms/graylog.md

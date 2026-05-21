@@ -1,1 +1,1 @@
-../../../../../../docs/troubleshooting/opensearch.md
+../../../shared/symptoms/opensearch.md

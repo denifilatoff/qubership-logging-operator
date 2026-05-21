@@ -25,7 +25,12 @@ agent-packages/logging-l2-troubleshooting/
     ├── instructions/
     │   └── logging-l2-troubleshooting.instructions.md   # trigger merged into AGENTS.md / CLAUDE.md
     ├── shared/
-    │   └── shared-contract.md                        # action tiers + recommend block schema
+    │   ├── shared-contract.md                        # action tiers + recommend block schema
+    │   └── symptoms/                                 # canonical symptom catalogues
+    │       ├── graylog.md
+    │       ├── opensearch.md
+    │       ├── fluentd.md
+    │       └── fluentbit.md
     └── skills/
         ├── logging-l2-triage/                            # entry point — routes to the rest
         │   ├── SKILL.md
@@ -36,7 +41,7 @@ agent-packages/logging-l2-troubleshooting/
         │   ├── SKILL.md
         │   └── references/
         │       ├── shared-contract.md  → ../../../shared/shared-contract.md
-        │       └── symptoms.md            → ../../../../../../docs/troubleshooting/graylog.md
+        │       └── symptoms.md          → ../../../shared/symptoms/graylog.md
         ├── troubleshoot-opensearch/  …
         ├── troubleshoot-fluentd/     …
         ├── troubleshoot-fluentbit/   …
@@ -45,13 +50,15 @@ agent-packages/logging-l2-troubleshooting/
 
 ## Reference content
 
-Symptom catalogues are **not duplicated** into the skills. Each skill's `references/symptoms.md` is a symlink back to the canonical file under [`docs/troubleshooting/`](../../docs/troubleshooting/) in this repository. Adding a new pattern or fixing a wrong one is a single edit in `docs/troubleshooting/<area>.md`; all consumers pick it up.
+Symptom catalogues live inside the package at `.apm/shared/symptoms/<area>.md` and are the **single source of truth**. Each skill's `references/symptoms.md` is a symlink into that shared directory (in-package, so it survives `apm install` resolution). The repo also ships `docs/troubleshooting/<area>.md` as symlinks pointing into this same shared directory, so human readers of the repo and the L2 skills see identical content.
 
-The shared `shared-contract.md` (action tiers, read-before-recommend rule, exact YAML block schema) is also symlinked into each skill's `references/`.
+Adding a new pattern or fixing a wrong one is a single edit — either in `.apm/shared/symptoms/<area>.md` directly, or via the `docs/troubleshooting/<area>.md` symlink; both routes hit the same file.
+
+The shared `shared-contract.md` (action tiers, read-before-recommend rule, exact YAML block schema) is similarly symlinked into each skill's `references/`.
 
 ## Out of scope
 
-Areas listed in the L2 methodology but **not** shipped yet because the reference guide has no entries for them: `troubleshoot-victoria-logs`, `troubleshoot-mongodb`, `troubleshoot-monitoring`, `troubleshoot-backup`, plus all deployment-time skills (`argocd`, `jenkins`, `ansible-vm-installer`, `logging-operator`). These will be added once `docs/troubleshooting/` grows the corresponding files.
+Areas listed in the L2 methodology but **not** shipped yet because the catalogue has no entries for them: `troubleshoot-victoria-logs`, `troubleshoot-mongodb`, `troubleshoot-monitoring`, `troubleshoot-backup`, plus all deployment-time skills (`argocd`, `jenkins`, `ansible-vm-installer`, `logging-operator`). These will be added once `.apm/shared/symptoms/` grows the corresponding files.
 
 ## Install
 
