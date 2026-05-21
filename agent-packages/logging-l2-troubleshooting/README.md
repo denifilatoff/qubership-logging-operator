@@ -50,11 +50,14 @@ agent-packages/logging-l2-troubleshooting/
 
 ## Reference content
 
-Symptom catalogues live inside the package at `.apm/shared/symptoms/<area>.md` and are the **single source of truth**. Each skill's `references/symptoms.md` is a symlink into that shared directory (in-package, so it survives `apm install` resolution). The repo also ships `docs/troubleshooting/<area>.md` as symlinks pointing into this same shared directory, so human readers of the repo and the L2 skills see identical content.
+Canonical symptom catalogues live inside the package at `.apm/shared/symptoms/<area>.md` and are the **single source of truth**. Each skill loads its area's catalogue as `references/symptoms.md`. The action-tier contract at `.apm/shared/shared-contract.md` is loaded by every skill as `references/shared-contract.md`.
 
-Adding a new pattern or fixing a wrong one is a single edit — either in `.apm/shared/symptoms/<area>.md` directly, or via the `docs/troubleshooting/<area>.md` symlink; both routes hit the same file.
+How the wiring looks at each audience:
 
-The shared `shared-contract.md` (action tiers, read-before-recommend rule, exact YAML block schema) is similarly symlinked into each skill's `references/`.
+- **In this repo (developers):** `references/*.md` and `docs/troubleshooting/<area>.md` are symlinks back to the canonical files in `.apm/shared/`. Edit `.apm/shared/symptoms/<area>.md` (or `docs/troubleshooting/<area>.md`, which symlinks to it); every consumer of the symlink sees the change.
+- **After `apm install` (consumers):** the package is sparse-checked-out and copied; `references/*.md` arrive as plain files containing the resolved content. There are no symlinks to maintain on the consumer side.
+
+Adding a new pattern or fixing a wrong one is therefore a single edit in this repo.
 
 ## Out of scope
 

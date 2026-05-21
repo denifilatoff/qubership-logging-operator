@@ -1,6 +1,6 @@
 # L2 action-tier protocol and `recommend` block schema
 
-Shared contract for every `troubleshoot-*` and `investigate-*` skill in this package. Skills reference this file via `references/shared-contract.md` (symlink).
+Shared contract for every `troubleshoot-*` and `investigate-*` skill in this package. Each skill loads it as `references/shared-contract.md`.
 
 ## Action tiers
 
