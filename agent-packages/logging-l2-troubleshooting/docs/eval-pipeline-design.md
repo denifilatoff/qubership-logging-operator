@@ -268,3 +268,54 @@ Verified against apm 0.14.1 and promptfoo (latest via `npx promptfoo@latest`, 20
 - **Resolved: `skill-used` assertion.** Type id is `skill-used` (negated: `not-skill-used`). Value is a skill name string, or an object `{pattern: '<glob>', min: N}`. It reads `metadata.skillCalls` populated by the provider — for `anthropic:claude-agent-sdk` this is derived from `Skill` tool invocations (`deriveSkillCalls` in `claude-agent-sdk-*.js`, filters `toolCall.name === "Skill"` and extracts `input.skill`). Errored skill attempts surface in metadata but do not satisfy the assertion. No extra provider config required beyond the standard `anthropic:claude-agent-sdk` setup.
 - **Resolved: disabling tools for the judge.** Use `config.custom_allowed_tools: []` on the `anthropic:claude-agent-sdk` provider. (Source: `claude-agent-sdk-*.js` — `custom_allowed_tools` is the override key; `disallowed_tools` is the deny-list; `allow_all_tools` is the escape hatch.) Verified: with `custom_allowed_tools: []`, `claude-opus-4-7` returned `{"ok": true}` and `is-json` passed. No need to fall back to plain Messages.
 - **Decision: workdir cleanup policy.** Keep all `$XDG_CACHE_HOME/qubership-logging-l2-evals/<run-id>/` directories. Manual cleanup only (`make clean` or `rm -rf` the cache root) — small footprint per run, valuable for post-mortem of failed evals. The cache lives outside the source package because `apm install` does a recursive copy of the source.
+
+---
+
+## 11. First-run findings
+
+**Run:** `20260522T214308Z`, 2026-05-23, `make eval REPEATS=3`.
+**Matrix:** `(claude-agent-sdk, claude-haiku-4-5)` agent, `(claude-agent-sdk, claude-opus-4-7)` judge.
+
+### Observed deltas
+
+| Fixture | with-pkg mean score | no-pkg mean score | delta | mean checks (with-pkg) | variance across 3 repeats |
+|---|---|---|---|---|---|
+| F2-fluentbit-oom | 0.83 | 0.00 | +0.83 | 4.0/6 | None — all three with-pkg repeats scored identically at 4/6; all three no-pkg at 0/6. |
+| F7-gelf-input-size | 0.75 | 0.00 | +0.75 | 3.0/6 | Visible — with-pkg scores were 2/6, 4/6, 3/6 across the three repeats; no-pkg uniformly 0/6. |
+
+`skill-used` (`logging-l2-triage`): with-pkg 3/3 on both fixtures; no-pkg 0/3 on both (no-pkg invariably picked `superpowers:systematic-debugging` instead).
+
+### What worked
+
+- The methodology's primary measure (with-pkg vs no-pkg delta) holds clearly on both fixtures at `REPEATS=3`: every with-pkg repeat outscored every no-pkg repeat on both fixtures.
+- Skill selection is deterministic per branch: with the package installed, the agent always invoked `logging-l2-triage`; without it, the agent always fell back to `superpowers:systematic-debugging`. A strong signal that the skill's description and triggering language are doing their job.
+- The fixture orchestrator's apply / revert / DS-restart between fixtures kept the cluster baseline healthy for the second fixture — F7 ran cleanly after F2 completed, no degradation observed.
+- Run completed end-to-end without orchestrator intervention. No fatal revert, no wedged agent.
+
+### What surprised
+
+- F2 had **zero observed variance** across 3 repeats (all 4/6), while F7 showed real variance (2/6, 4/6, 3/6). Either F2's rubric is anchored on checks the agent reliably gets right-or-wrong, or the F2 task itself has less ambiguity in the "good answer" surface. Worth watching at higher `REPEATS` whether F2 stays this stable.
+- Even with the package installed, neither fixture got above 4/6 in any repeat. The skill measurably helps (vs 0/6 baseline), but doesn't drive the haiku-tier agent to a full pass. This is healthy headroom — the eval is not saturating — but suggests two or three of the six checks on each fixture are out of haiku's reach in a single turn.
+- Wall-clock per fixture was small (F2 2m 0s, F7 2m 37s of promptfoo time with concurrency 4); the orchestrator's apply/revert and DS rollouts contribute meaningfully to the total — full run was ~7m 20s wall-clock.
+
+### Known limitations carried forward
+
+- Per-check `pass-rate` from the judge's `checks[]` array is not surfaced in the aggregator. Promptfoo discards everything except the `reason` string from the judge response, so we recover only mean X/N from the reason text via regex. To get per-check rates we'd need a custom assertion that writes the judge JSON to a side file, or a promptfoo patch. Today we cannot tell which two checks the agent reliably fails on F2 — only that two of them do.
+- Rubric calibration is therefore inspected at aggregate granularity. No check was tuned in this run; tuning without per-check signal would be speculative.
+- `tokenUsage` and `cost` are reported per provider call, but the judge component's `cost` field is `0` on the agent-sdk path in our records (only the agent's cost is captured). Total cost numbers below are agent-only; judge cost is uncounted.
+
+### Cost / time
+
+- Total wall-clock: ~7m 20s (orchestrator start `00:43:08` → finish `00:50:28`, MSK).
+- Agent tokens: F2 17,908 total (286 prompt / 17,622 completion across 6 transcripts); F7 31,840 total (586 prompt / 31,254 completion). Grand total agent tokens: ~49.7k.
+- Per-fixture grand totals printed by promptfoo (include grading): F2 21,358 total tokens, F7 34,637 total tokens.
+- Estimated cost (promptfoo's `cost` field, agent calls only): F2 $0.34, F7 $0.67. Grand total agent-side: **~$1.01**. Judge cost not captured per the limitation above; rough Opus-4.7 estimate for the ~2.8k grading completion tokens across 12 calls is well under $1.
+- Concurrency: 4 (promptfoo default). One kind cluster, fixtures run sequentially.
+
+### Follow-ups (not in v1)
+
+- Capture per-check pass-rates by adding a custom assertion that side-writes the judge JSON, then teach `aggregate.sh` to emit a per-check table. Without this, rubric tuning remains aggregate-only.
+- Add the `logging-operator-troubleshoot` skill; reintroduce F4 once it exists (deferred from v1).
+- Add a second `(harness, model)` cell once OpenCode + local 7B is on the workstation. The eval surface is already isolated to `providers/*.yaml`, so this is a single-file change per cell.
+- Wire CI bootstrap (kind + helmfile) and a regression-gating threshold against baselines from this run. Suggested initial gate: with-pkg mean must stay ≥ 0.6 on each v1 fixture; delta must stay ≥ +0.5.
+- Investigate why F2 has zero variance at `REPEATS=3` — either feature or artefact, worth confirming at `REPEATS=5` once cost budget allows.
