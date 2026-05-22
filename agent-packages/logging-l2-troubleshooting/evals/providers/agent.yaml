@@ -1,11 +1,18 @@
 # Agent under test: Claude Code (claude-agent-sdk) on Haiku 4.5.
 # Routes through the local Claude Code session — no ANTHROPIC_API_KEY required.
 #
-# `cwd` is set per-test via promptfoo template var; see promptfooconfig.yaml.
-# Tools are left at the provider default (full Claude Code surface).
+# `working_dir` is set per-test via promptfoo template var; see
+# promptfooconfig.yaml. The promptfoo claude-agent-sdk provider uses
+# `working_dir` (not `cwd`) — passing `cwd` is silently ignored and the agent
+# ends up in a temp directory with no tools.
+#
+# `allow_all_tools: true` is required for the agent to use kubectl/Bash; with
+# `working_dir` alone the provider only enables read-only FS tools (Read/Grep/
+# Glob/LS), which is not enough for L2 troubleshooting against a live cluster.
 id: anthropic:claude-agent-sdk
 label: agent-claude-code-haiku-4-5
 config:
   model: claude-haiku-4-5
   apiKeyRequired: false
-  cwd: "{{workdir}}"
+  working_dir: "{{workdir}}"
+  allow_all_tools: true

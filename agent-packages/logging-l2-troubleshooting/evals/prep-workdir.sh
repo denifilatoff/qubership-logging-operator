@@ -39,8 +39,12 @@ rm -rf "$workdir"
 mkdir -p "$workdir"
 
 if [ "$variant" = "with-pkg" ]; then
+  # --force: the source package contains evals/node_modules with binary deps,
+  # which `apm install` flags as "critical hidden characters". The skills under
+  # .apm/skills/ are the actual deliverable and are vetted; we override the
+  # heuristic for this eval-only install path.
   ( cd "$workdir" \
-    && apm install "$package_dir" --target claude --verbose \
+    && apm install "$package_dir" --target claude --force --verbose \
        >"$workdir/.apm-install.log" 2>&1 )
 fi
 

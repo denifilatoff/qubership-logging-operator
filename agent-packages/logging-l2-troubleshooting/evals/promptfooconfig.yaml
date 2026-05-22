@@ -14,13 +14,18 @@ providers:
     config:
       model: claude-haiku-4-5
       apiKeyRequired: false
-      cwd: "{{workdir_with}}"
+      # NB: the provider config key is `working_dir`, not `cwd`.
+      working_dir: "{{workdir_with}}"
+      # Default with `working_dir` is read-only FS tools only; we need
+      # kubectl/Bash for live-cluster troubleshooting.
+      allow_all_tools: true
   - id: anthropic:claude-agent-sdk
     label: no-pkg
     config:
       model: claude-haiku-4-5
       apiKeyRequired: false
-      cwd: "{{workdir_no}}"
+      working_dir: "{{workdir_no}}"
+      allow_all_tools: true
 
 tests:
   - description: "{{fixture}}"
@@ -37,8 +42,11 @@ tests:
       # transform receives `context.metadata` from the provider response,
       # where `toolCalls` is populated by the claude-agent-sdk provider.
       - type: llm-rubric
+        # Multi-line transforms are wrapped in `function(output, context) {...}`
+        # by promptfoo, so we need an explicit `return`. Single-expression
+        # transforms can omit it, but the multi-line form requires it.
         transform: |
-          JSON.stringify({
+          return JSON.stringify({
             result: typeof output === 'string' ? output : JSON.stringify(output),
             toolCalls: (context && context.metadata && context.metadata.toolCalls) || []
           }, null, 2)
@@ -49,6 +57,10 @@ tests:
             model: claude-opus-4-7
             apiKeyRequired: false
             custom_allowed_tools: []
-        rubricPrompt: file://judge-prompt.md
+        # Renamed from .md to .txt: promptfoo's processFileReference (used
+        # by llm-rubric for inline value/template files) only supports .txt,
+        # .json, .yaml, .yml. .md leaks through some code paths but breaks
+        # randomly across providers in the same run.
+        rubricPrompt: file://judge-prompt.txt
       - type: skill-used
         value: logging-l2-triage
