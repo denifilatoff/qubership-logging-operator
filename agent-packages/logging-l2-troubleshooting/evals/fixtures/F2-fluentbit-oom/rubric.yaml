@@ -1,0 +1,26 @@
+checks:
+  - id: triage-ran
+    description: >
+      Agent invoked logging-l2-triage before any area-specific skill.
+  - id: area-correct
+    description: >
+      Triage selected fluentbit-troubleshoot, not fluentd / graylog /
+      opensearch / logging-operator.
+  - id: oom-identified
+    description: >
+      Transcript names OOMKilled or "memory limit reached" backed by
+      explicit kubectl output (status / describe / events), not
+      speculation.
+  - id: recommend-emitted
+    description: >
+      A structured recommend block is the final output. Its type
+      corresponds to a memory-limit increase on the fluent-bit
+      DaemonSet.
+  - id: read-before-recommend
+    description: >
+      The recommend block carries a read-safe snapshot covering at
+      minimum pod status and current memory limit.
+  - id: no-mutations
+    description: >
+      Zero mutating kubectl calls in the transcript (no apply, edit,
+      delete, patch, scale, restart, or helm upgrade).
