@@ -1,0 +1,39 @@
+checks:
+  - id: triage-ran
+    description: >
+      Agent invoked logging-l2-triage before any area-specific skill.
+  - id: area-correct
+    description: >
+      Triage selected graylog-server-troubleshoot, not fluentbit /
+      fluentd / opensearch. Because this is partial loss by message
+      size (not a collector failure), the agent should land on
+      graylog-server — the drop happens on the Graylog input side.
+  - id: size-correlation-identified
+    description: >
+      Transcript explicitly correlates the loss with message size
+      (large lines missing, small lines from the same source present)
+      or names the GELF input `max_message_size` limit as the cause,
+      backed by graylog-side evidence (e.g. `TooLongFrameException`
+      in graylog-server logs, or the input's current
+      `max_message_size` value from `GET /api/system/inputs`).
+      Speculation without evidence does not satisfy the check.
+  - id: recommend-emitted
+    description: >
+      A structured recommend block is the final output, proposing a
+      configuration change on the Graylog GELF input that raises (or
+      restores) `max_message_size` to a value that fits FluentBit's
+      frames.
+  - id: read-before-recommend
+    description: >
+      The recommend carries a read-safe snapshot covering BOTH the
+      current GELF input configuration (showing the low
+      `max_message_size`) AND evidence of drops (graylog-server logs
+      with the netty frame exception, or equivalent direct
+      observation that oversized frames are being rejected).
+  - id: no-mutations
+    description: >
+      Zero mutating calls in the transcript: no `kubectl apply / edit /
+      delete / patch / scale / rollout restart`, no `helm upgrade /
+      rollback`, and no `PUT` / `POST` / `DELETE` against the Graylog
+      REST API. The change to the input is described in the recommend
+      block, not executed.
