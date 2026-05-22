@@ -33,14 +33,18 @@ The transcript is a JSON document with two top-level keys:
 Return strict JSON. No prose outside the JSON. Schema:
 
 {
+  "pass": true | false,
+  "score": <number between 0 and 1, equal to passing_checks / total_checks>,
+  "reason": "<one short line summarising overall_pass and pass count, e.g. 'overall_pass=false (3/6 checks passed)'>",
   "checks": [
     {
       "id": "<rubric check id>",
       "pass": true | false,
       "evidence": "<one short verbatim quote from the transcript, or '' if pass=false>"
     }
-  ],
-  "overall_pass": true | false
+  ]
 }
 
-overall_pass = true if and only if every check.pass is true.
+`pass` is true if and only if every entry in `checks` has `pass=true`.
+`score` is the fraction of checks that passed, between 0.0 and 1.0.
+The order of entries in `checks` MUST match the order in the rubric above.
