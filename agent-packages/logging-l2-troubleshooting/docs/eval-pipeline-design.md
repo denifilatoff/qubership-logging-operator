@@ -61,7 +61,6 @@ agent-packages/logging-l2-troubleshooting/
     │   │   └── rubric.yaml
     │   └── F4-helm-bad-image/
     │       └── …
-    ├── .work/                           # gitignored; ephemeral run workdirs
     └── results/                         # gitignored; promptfoo + aggregated reports
 ```
 
@@ -108,7 +107,7 @@ The pipeline grades **package installation**, not "skill file present vs absent"
 
 ```
 prep-workdir.sh <fixture-id> <variant> <run-id>
-  workdir=evals/.work/<run-id>/<fixture-id>/<variant>
+  workdir=${XDG_CACHE_HOME:-$HOME/.cache}/qubership-logging-l2-evals/<run-id>/<fixture-id>/<variant>
   rm -rf "$workdir" && mkdir -p "$workdir"
 
   if [ "$variant" = "with-pkg" ]; then
@@ -124,7 +123,7 @@ Consequences:
 
 - The eval tests the same surface a real user sees — `apm install … --target claude`. If install ever silently breaks the package's deployment to Claude Code, the eval catches it.
 - No stale snapshots of skills checked into `fixtures/*/`. The package itself is the source of truth; the next eval run picks up its current state.
-- Workdirs under `evals/.work/<run-id>/` are ephemeral. Keep across runs for debugging or wipe.
+- Workdirs under `$XDG_CACHE_HOME/qubership-logging-l2-evals/<run-id>/` (default `~/.cache/...`) are ephemeral. They live **outside** the source package because `apm install` does a recursive copy of the source — placing the workdir inside the package would copy the workdir into itself until the filesystem hits `ENAMETOOLONG`. `make clean` wipes the cache root.
 
 ### 3.4. Cluster lifecycle
 
@@ -138,7 +137,7 @@ Both the agent under test and the judge go through `promptfoo`'s `claude-agent-s
 
 | Role | Provider | Model | Tools | Working dir |
 |---|---|---|---|---|
-| Agent under test | `claude-agent-sdk` | `claude-haiku-4-5` | full Claude Code toolset | `.work/<run-id>/<fix>/<variant>/` |
+| Agent under test | `claude-agent-sdk` | `claude-haiku-4-5` | full Claude Code toolset | `$XDG_CACHE_HOME/qubership-logging-l2-evals/<run-id>/<fix>/<variant>/` |
 | Judge | `claude-agent-sdk` | `claude-opus-4-7` | none | irrelevant |
 
 The judge runs as `llm-rubric` provider override in `promptfooconfig.yaml`. It receives the captured transcript, `ground_truth.md`, and the YAML-serialised checks from `rubric.yaml`, and returns JSON per the `judge-prompt.md` template.
@@ -268,4 +267,4 @@ Verified against apm 0.14.1 and promptfoo (latest via `npx promptfoo@latest`, 20
 - **Resolved: promptfoo `claude-agent-sdk` provider with Claude Code session.** Provider id is `anthropic:claude-agent-sdk` (the bare `claude-agent-sdk` id is not recognised). The provider requires the `@anthropic-ai/claude-agent-sdk` npm package to be resolvable from the cwd (`npm install @anthropic-ai/claude-agent-sdk` in the eval root once). To skip `ANTHROPIC_API_KEY`, set `config.apiKeyRequired: false` — the provider then routes through the local Claude Code session (`~/.claude/.credentials.json` / macOS keychain). Verified by a `pong` round-trip against `claude-haiku-4-5` with `ANTHROPIC_API_KEY` unset.
 - **Resolved: `skill-used` assertion.** Type id is `skill-used` (negated: `not-skill-used`). Value is a skill name string, or an object `{pattern: '<glob>', min: N}`. It reads `metadata.skillCalls` populated by the provider — for `anthropic:claude-agent-sdk` this is derived from `Skill` tool invocations (`deriveSkillCalls` in `claude-agent-sdk-*.js`, filters `toolCall.name === "Skill"` and extracts `input.skill`). Errored skill attempts surface in metadata but do not satisfy the assertion. No extra provider config required beyond the standard `anthropic:claude-agent-sdk` setup.
 - **Resolved: disabling tools for the judge.** Use `config.custom_allowed_tools: []` on the `anthropic:claude-agent-sdk` provider. (Source: `claude-agent-sdk-*.js` — `custom_allowed_tools` is the override key; `disallowed_tools` is the deny-list; `allow_all_tools` is the escape hatch.) Verified: with `custom_allowed_tools: []`, `claude-opus-4-7` returned `{"ok": true}` and `is-json` passed. No need to fall back to plain Messages.
-- **Decision: workdir cleanup policy.** Keep all `evals/.work/<run-id>/` directories, gitignored. Manual cleanup only — small footprint per run, valuable for post-mortem of failed evals.
+- **Decision: workdir cleanup policy.** Keep all `$XDG_CACHE_HOME/qubership-logging-l2-evals/<run-id>/` directories. Manual cleanup only (`make clean` or `rm -rf` the cache root) — small footprint per run, valuable for post-mortem of failed evals. The cache lives outside the source package because `apm install` does a recursive copy of the source.

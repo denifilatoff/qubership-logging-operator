@@ -1,5 +1,5 @@
-# Ephemeral workdirs created by prep-workdir.sh
-.work/
+# Ephemeral workdirs live under $XDG_CACHE_HOME/qubership-logging-l2-evals/
+# (see prep-workdir.sh), not in this directory.
 
 # Promptfoo and aggregator output
 results/
