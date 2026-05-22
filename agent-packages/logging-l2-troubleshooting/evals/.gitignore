@@ -1,0 +1,8 @@
+# Ephemeral workdirs created by prep-workdir.sh
+.work/
+
+# Promptfoo and aggregator output
+results/
+
+# npm dep for the claude-agent-sdk provider; installed locally in this dir
+node_modules/

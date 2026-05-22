@@ -4,16 +4,18 @@ L2 troubleshooting skills for the Qubership logging stack. The engineer's local 
 
 Every skill in this package is **read-only against live systems**. State-changing fixes are emitted as a structured `recommend` block per the shared protocol; the operator decides whether and when to apply them.
 
+See `evals/` for the L2 eval pipeline and `docs/eval-pipeline-design.md` for its design.
+
 ## Skills
 
 | Skill | Role | When |
 |---|---|---|
-| [`logging-l2-triage`](.apm/skills/logging-l2-triage/SKILL.md) | Entry point / router | Any live troubleshooting session — runs a read-safe sweep, picks the right knowledge-area skill, hands off. Use this first; do not jump straight into a `troubleshoot-*` skill from a free-form complaint. |
-| [`troubleshoot-graylog-server`](.apm/skills/troubleshoot-graylog-server/SKILL.md) | Graylog server | UI inaccessible, OOM, journal pressure, "not processing messages", deflector errors, widget errors, timestamps, OpenSearch nodes info unavailable. |
-| [`troubleshoot-opensearch`](.apm/skills/troubleshoot-opensearch/SKILL.md) | OpenSearch / Elasticsearch | Mapping field-limit explosions, `.opendistro-ism-config` noise, heap past 32 GB, disk-allocator read-only locks. |
-| [`troubleshoot-fluentd`](.apm/skills/troubleshoot-fluentd/SKILL.md) | FluentD | Worker SIGKILL / OOM, high DiskIO, GELF UDP "data too big / 128 chunks", configmap-reload restarts. |
-| [`troubleshoot-fluentbit`](.apm/skills/troubleshoot-fluentbit/SKILL.md) | FluentBit | Connection timeout to Graylog, stuck pipeline, configmap-reload restarts. |
-| [`investigate-graylog-disk-usage`](.apm/skills/investigate-graylog-disk-usage/SKILL.md) | Disk-usage breakdown | "Which producers are filling our log storage?" — ranked report by configurable dimension. Callable standalone or as a sub-step of `troubleshoot-graylog-server`. |
+| [`logging-l2-triage`](.apm/skills/logging-l2-triage/SKILL.md) | Entry point / router | Any live troubleshooting session — runs a read-safe sweep, picks the right knowledge-area skill, hands off. Use this first; do not jump straight into a `*-troubleshoot` skill from a free-form complaint. |
+| [`graylog-server-troubleshoot`](.apm/skills/graylog-server-troubleshoot/SKILL.md) | Graylog server | UI inaccessible, OOM, journal pressure, "not processing messages", deflector errors, widget errors, timestamps, OpenSearch nodes info unavailable. |
+| [`opensearch-troubleshoot`](.apm/skills/opensearch-troubleshoot/SKILL.md) | OpenSearch / Elasticsearch | Mapping field-limit explosions, `.opendistro-ism-config` noise, heap past 32 GB, disk-allocator read-only locks. |
+| [`fluentd-troubleshoot`](.apm/skills/fluentd-troubleshoot/SKILL.md) | FluentD | Worker SIGKILL / OOM, high DiskIO, GELF UDP "data too big / 128 chunks", configmap-reload restarts. |
+| [`fluentbit-troubleshoot`](.apm/skills/fluentbit-troubleshoot/SKILL.md) | FluentBit | Connection timeout to Graylog, stuck pipeline, configmap-reload restarts. |
+| [`graylog-disk-usage-investigate`](.apm/skills/graylog-disk-usage-investigate/SKILL.md) | Disk-usage breakdown | "Which producers are filling our log storage?" — ranked report by configurable dimension. Callable standalone or as a sub-step of `graylog-server-troubleshoot`. |
 
 ## Layout
 
@@ -37,15 +39,15 @@ agent-packages/logging-l2-troubleshooting/
         │   └── references/
         │       ├── shared-contract.md  → ../../../shared/shared-contract.md
         │       └── signal-table.md                       # symptom → target-skill mapping with priors
-        ├── troubleshoot-graylog-server/
+        ├── graylog-server-troubleshoot/
         │   ├── SKILL.md
         │   └── references/
         │       ├── shared-contract.md  → ../../../shared/shared-contract.md
         │       └── symptoms.md          → ../../../shared/symptoms/graylog.md
-        ├── troubleshoot-opensearch/  …
-        ├── troubleshoot-fluentd/     …
-        ├── troubleshoot-fluentbit/   …
-        └── investigate-graylog-disk-usage/  …
+        ├── opensearch-troubleshoot/  …
+        ├── fluentd-troubleshoot/     …
+        ├── fluentbit-troubleshoot/   …
+        └── graylog-disk-usage-investigate/  …
 ```
 
 ## Reference content
@@ -61,7 +63,7 @@ Adding a new pattern or fixing a wrong one is therefore a single edit in this re
 
 ## Out of scope
 
-Areas listed in the L2 methodology but **not** shipped yet because the catalogue has no entries for them: `troubleshoot-victoria-logs`, `troubleshoot-mongodb`, `troubleshoot-monitoring`, `troubleshoot-backup`, plus all deployment-time skills (`argocd`, `jenkins`, `ansible-vm-installer`, `logging-operator`). These will be added once `.apm/shared/symptoms/` grows the corresponding files.
+Areas listed in the L2 methodology but **not** shipped yet because the catalogue has no entries for them: `victoria-logs-troubleshoot`, `mongodb-troubleshoot`, `monitoring-troubleshoot`, `backup-troubleshoot`, plus the K8s deployment-time skills (`argocd`, `jenkins`, `logging-operator`). These will be added once `.apm/shared/symptoms/` grows the corresponding files. The Ansible VM installer (`external-logging-installer`) is **not** on this list — it deploys onto a Linux VM and is out of scope under the methodology's K8s-only invariant.
 
 ## Install
 
