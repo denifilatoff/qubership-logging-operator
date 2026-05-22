@@ -1,0 +1,54 @@
+description: L2 troubleshooting skill eval — fixture passed as CLI var.
+
+prompts:
+  - file://{{fixture_dir}}/prompt.txt
+
+# Both runtime providers are claude-agent-sdk on haiku; they differ only
+# in cwd and label. Inlined here (rather than via file://providers/agent.yaml)
+# because promptfoo's external-provider include doesn't cleanly support
+# per-cell config overrides across versions. providers/*.yaml are the
+# canonical reference — keep these blocks in sync with them.
+providers:
+  - id: anthropic:claude-agent-sdk
+    label: with-pkg
+    config:
+      model: claude-haiku-4-5
+      apiKeyRequired: false
+      cwd: "{{workdir_with}}"
+  - id: anthropic:claude-agent-sdk
+    label: no-pkg
+    config:
+      model: claude-haiku-4-5
+      apiKeyRequired: false
+      cwd: "{{workdir_no}}"
+
+tests:
+  - description: "{{fixture}}"
+    vars:
+      fixture_dir: "fixtures/{{fixture}}"
+      ground_truth: file://fixtures/{{fixture}}/ground_truth.md
+      rubric_yaml: file://fixtures/{{fixture}}/rubric.yaml
+    assert:
+      # llm-rubric's default rubric var is `{{ output }}` and it ONLY carries
+      # the agent's final assistant text — not tool calls. Most rubric checks
+      # need to inspect tool calls (kubectl invocations, Skill calls). We
+      # reshape `output` via assertion.transform so the judge sees a JSON
+      # document with both the final text and the tool-call array. The
+      # transform receives `context.metadata` from the provider response,
+      # where `toolCalls` is populated by the claude-agent-sdk provider.
+      - type: llm-rubric
+        transform: |
+          JSON.stringify({
+            result: typeof output === 'string' ? output : JSON.stringify(output),
+            toolCalls: (context && context.metadata && context.metadata.toolCalls) || []
+          }, null, 2)
+        provider:
+          id: anthropic:claude-agent-sdk
+          label: judge-claude-code-opus-4-7
+          config:
+            model: claude-opus-4-7
+            apiKeyRequired: false
+            custom_allowed_tools: []
+        rubricPrompt: file://judge-prompt.md
+      - type: skill-used
+        value: logging-l2-triage

@@ -15,7 +15,18 @@ mark fail.
 
 # Transcript
 
-{{transcript}}
+The transcript is a JSON document with two top-level keys:
+
+- `result`: the agent's final assistant message (string).
+- `toolCalls`: an array of tool invocations in chronological order, each
+  with `name`, `input`, `output`, and `is_error`. Treat `name == "Skill"`
+  with `input.skill == "<id>"` as the agent invoking the skill `<id>`.
+  Treat `name == "Bash"` with `input.command` containing kubectl /
+  helm / etc. as a shell action; check `output` for its result. Treat
+  any non-list-style verb (apply, edit, delete, patch, scale, restart,
+  helm upgrade, etc.) as a mutating call.
+
+{{output}}
 
 # Output
 
