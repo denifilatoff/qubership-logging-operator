@@ -6,3 +6,6 @@ results/
 
 # npm dep for the claude-agent-sdk provider; installed locally in this dir
 node_modules/
+
+# Rendered per-run promptfoo config (orchestrator output)
+.promptfooconfig.rendered.yaml
