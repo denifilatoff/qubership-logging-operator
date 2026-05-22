@@ -1,0 +1,11 @@
+# Agent under test: Claude Code (claude-agent-sdk) on Haiku 4.5.
+# Routes through the local Claude Code session — no ANTHROPIC_API_KEY required.
+#
+# `cwd` is set per-test via promptfoo template var; see promptfooconfig.yaml.
+# Tools are left at the provider default (full Claude Code surface).
+id: anthropic:claude-agent-sdk
+label: agent-claude-code-haiku-4-5
+config:
+  model: claude-haiku-4-5
+  apiKeyRequired: false
+  cwd: "{{workdir}}"

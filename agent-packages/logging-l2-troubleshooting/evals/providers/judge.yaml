@@ -1,0 +1,9 @@
+# Judge: Claude Code (claude-agent-sdk) on Opus 4.7.
+# Tools disabled — the transcript and rubric are passed in the prompt,
+# so the judge needs no tool surface.
+id: anthropic:claude-agent-sdk
+label: judge-claude-code-opus-4-7
+config:
+  model: claude-opus-4-7
+  apiKeyRequired: false
+  custom_allowed_tools: []
