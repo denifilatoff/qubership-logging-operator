@@ -27,7 +27,7 @@ The pipeline produces, per fixture, a `(with-package, no-package)` pass-rate del
 | Judge | `(claude-agent-sdk, claude-opus-4-7)`, routed via the user's Claude Code subscription (no API key) |
 | Layout | `agent-packages/logging-l2-troubleshooting/evals/` (per-package, self-contained) |
 | Cluster fixtures | Stay in `deploy/kind/fixtures/`, linked from eval fixtures by ID |
-| Fixtures v1 | `F2-fluentbit-oom`, `F4-helm-bad-image` |
+| Fixtures v1 | `F2-fluentbit-oom`, `F7-gelf-input-size` (F4 dropped — its target area `logging-operator-troubleshoot` is not shipped in this package; deferred per §11 follow-ups) |
 | Variance | `--repeat 3` by default, overridable |
 | CI | Local-only in v1; CI wiring is a follow-up |
 
@@ -49,7 +49,8 @@ agent-packages/logging-l2-troubleshooting/
     ├── promptfooconfig.yaml             # providers, assertions
     ├── orchestrator.sh                  # per-fixture apply → eval → revert
     ├── prep-workdir.sh                  # apm install into a fresh dir per variant
-    ├── judge-prompt.md                  # rubric template for llm-rubric
+    ├── judge-prompt.txt                 # rubric template for llm-rubric (.txt because promptfoo's processFileReference rejects .md)
+    ├── aggregate.sh                     # results JSON → summary.md
     ├── providers/
     │   ├── agent.yaml                   # claude-agent-sdk + haiku-4.5
     │   └── judge.yaml                   # claude-agent-sdk + opus-4-7, no tools
@@ -59,8 +60,8 @@ agent-packages/logging-l2-troubleshooting/
     │   │   ├── prompt.txt
     │   │   ├── ground_truth.md
     │   │   └── rubric.yaml
-    │   └── F4-helm-bad-image/
-    │       └── …
+    │   └── F7-gelf-input-size/
+    │       └── (same four files)
     └── results/                         # gitignored; promptfoo + aggregated reports
 ```
 
@@ -72,7 +73,7 @@ Cluster-side artefacts stay in `deploy/kind/fixtures/<id>/` (apply.sh, revert.sh
 make eval
   └─ orchestrator.sh
        run_id=$(date +%Y%m%dT%H%M%S)
-       for fix in F2-fluentbit-oom F4-helm-bad-image:
+       for fix in F2-fluentbit-oom F7-gelf-input-size:
          workdir_with=$(prep-workdir.sh "$fix" with-pkg "$run_id")  # apm install here
          workdir_no=$(prep-workdir.sh   "$fix" no-pkg   "$run_id")  # empty dir
          deploy/kind/fixtures/fixture.sh apply "${meta.cluster_fixture}"

@@ -1,4 +1,4 @@
-.PHONY: eval eval-F2 eval-F4 report clean baseline-check setup
+.PHONY: eval eval-F2 eval-F7 report clean baseline-check setup
 
 REPEATS ?= 3
 
@@ -24,8 +24,8 @@ eval-F2: setup baseline-check
 	./orchestrator.sh $(REPEATS) F2-fluentbit-oom
 	$(MAKE) report
 
-eval-F4: setup baseline-check
-	./orchestrator.sh $(REPEATS) F4-helm-bad-image
+eval-F7: setup baseline-check
+	./orchestrator.sh $(REPEATS) F7-gelf-input-size
 	$(MAKE) report
 
 report:

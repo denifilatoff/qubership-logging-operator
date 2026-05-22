@@ -6,8 +6,9 @@ Local-only v1 eval pipeline for the L2 skill package. See
 
 ## Prerequisites
 
-- kind cluster + helmfile baseline up. v1 fixtures (F2, F4) work on either
-  `BACKEND=victorialogs` or `BACKEND=graylog`.
+- kind cluster + helmfile baseline up. v1 fixtures: F2 (FluentBit OOM)
+  works on either backend; F7 (Graylog GELF input size) requires
+  `BACKEND=graylog`.
 - `claude` CLI logged into the Claude Code subscription (the
   `anthropic:claude-agent-sdk` provider routes through this session).
 - `apm`, `node`/`npx`, `jq` on PATH. `promptfoo` is invoked via
@@ -29,7 +30,7 @@ make eval
 
 # Single fixture
 make eval-F2
-make eval-F4
+make eval-F7
 
 # Aggregate the last run into summary.md
 make report
