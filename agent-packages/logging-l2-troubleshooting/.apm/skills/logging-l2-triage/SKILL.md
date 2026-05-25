@@ -5,14 +5,9 @@ description: L2 triage for the Qubership logging stack — runs an initial read-
 
 # L2 Triage — logging stack
 
-You are the router between the engineer's complaint and the right knowledge-area skill. Your job is to **figure out which area to investigate**, then **invoke that area's skill yourself via the `Skill` tool** so the rest of the diagnosis happens in this same session with both skills' guidance in context. You are not a separate agent that hands off to another agent — you load the next skill into your own context and keep going.
+Figure out which knowledge area to investigate, then invoke that area's skill yourself via the `Skill` tool so the diagnosis continues in this same session.
 
-Two entry shapes — same flow:
-
-1. **Ticket-driven** — an L1 handoff envelope (affected app, version, deploy params, symptom scope, symptom text, chosen area or `ambiguous`).
-2. **Engineer-driven** — a free-form sentence like "logs from service X disappeared", "Graylog is slow", "who's flooding the disk this time".
-
-The target Kubernetes cluster is already reachable from the current shell — `kubectl` works, and the Graylog and OpenSearch HTTP endpoints are reachable (in-cluster Service, port-forward, or an externally exposed route). This skill operates only against K8s. VM-deployed Graylog with on-host `docker` shells and SSH-driven procedures are out of scope (see the methodology's K8s-only invariant). The HTTP/REST APIs of Graylog and OpenSearch are the one exception: their probes work regardless of where the server runs, so they stay in scope here too.
+Cluster reachability and the K8s-only invariant: see [references/shared-contract.md](references/shared-contract.md#how-l2-skills-are-invoked).
 
 ## Prereq discovery (do not ask the engineer)
 
@@ -54,6 +49,12 @@ kubectl describe pod <pod>     # look at LastState.terminated.reason, RestartCou
 curl -sk -u <u>:<p> https://<graylog>/api/system/journal
 curl -sk -u <u>:<p> https://<graylog>/api/system/cluster/nodes
 curl -sk -u <u>:<p> https://<graylog>/api/system/inputstates
+
+# 3b. Graylog input-side errors. Catches GELF frame-size drops and similar
+#     input-parser issues that don't surface in /api/system/* but explain
+#     "logs not arriving" without any collector-side failure. Routes to
+#     graylog-server first via the signal-table row for TooLongFrameException.
+kubectl -n <ns> logs <graylog-pod> --tail=500 | grep -iE 'TooLongFrame|max_message_size|drop'
 
 # 4. OpenSearch cluster health and disk. RED status / unassigned shards / read-only flags
 #    each route to opensearch-troubleshoot with high prior.
@@ -99,10 +100,18 @@ The candidate list is walked top-down by a single loop:
 ```
 for candidate in ranked_list:
     Skill({"skill": candidate})
-    if candidate confirmed the cause:
+    if candidate emitted a recommend:
         finish — emit recommend for that cause, stop
     if candidate returned hypothesis_refuted:
-        continue to next candidate
+        switch signal_class:
+          clean:                  continue with the next candidate already in ranked_list
+          secondary_backpressure: find immediate downstream of <candidate> per topology table;
+                                  if not yet walked, prepend to remaining list;
+                                  else walk one more hop downstream
+          secondary_quoted:       for each entry in cited_external_components, look up the cited-string map;
+                                  prepend each match to the remaining list;
+                                  if no match, treat as clean
+        continue
     if step budget exhausted:
         break
 emit a recommend for manual diagnosis with the full audit trail, stop
@@ -111,13 +120,13 @@ emit a recommend for manual diagnosis with the full audit trail, stop
 Rules:
 
 - **Found the cause → stop.** As soon as any area skill produces a recommend backed by evidence of an actual root cause in its zone, the case is done. Do not walk the rest of the list "for completeness". Extra invocations cost a sweep each and risk noise.
-- **Refute → next.** A `hypothesis_refuted` outcome from the candidate (defined in each area SKILL's contract) is the only signal to advance the list. Treat all three of these as refute equivalents: the area skill explicitly emits `hypothesis_refuted`; its sweep is clean in its zone and it names a different area as the likely owner; it reaches a recommend whose evidence contradicts the routing signal.
+- **Refute → route per `signal_class`.** Each `hypothesis_refuted` carries a `signal_class`: `clean` advances the existing list; `secondary_backpressure` and `secondary_quoted` may insert new candidates derived from the stack topology and the cited-string map in `signal-table.md`. Treat all three as legitimate advance signals — don't stop early because the next candidate wasn't in the original ranked list.
 - **Step budget: 5 area-skill invocations per session.** Most chains converge in 1–2 hops; the budget is for cases where the symptom is genuinely ambiguous across the stack. After 5 refutes, the case is harder than the catalogue covers — escalate.
 - **Don't shop.** "Try the next skill just in case" is not the contract. Advance only on refute or budget exhaustion.
 
-Your tool call to advance the chain is `Skill({"skill": "<candidate>"})`. The area skill's guidance loads into this same session — there is no separate agent, no return event. After the call, continue in your own voice, applying that area skill's protocol with the sweep evidence already in your context.
+Advance the chain with `Skill({"skill": "<candidate>"})`. After the call, continue in your own voice, applying that area skill's protocol with the sweep evidence already in your context.
 
-**Do not end on a "handoff envelope" message.** Emitting a YAML envelope and stopping leaves the engineer with raw triage data and no diagnosis. The envelope below is an internal mental model — useful for organising what you carry into each area skill, never the final user-facing output.
+**Do not end on a "handoff envelope" message.** Emit a YAML envelope only as an internal note to organise what you carry into each area skill — never as the final user-facing output.
 
 ### Internal mental model (what to carry into the area skill)
 

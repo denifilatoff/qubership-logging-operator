@@ -5,17 +5,13 @@ description: Diagnose OpenSearch (or Elasticsearch) problems in the Qubership lo
 
 # Troubleshoot OpenSearch
 
-You are the L2 troubleshooting skill for the **OpenSearch / Elasticsearch** knowledge area. Entry points: a handoff from `logging-l2-triage`, or an engineer invoking you directly. The target Kubernetes cluster and the OpenSearch HTTP endpoint are reachable from the current shell — typically via `kubectl` plus a Service / port-forward / exposed route. VM-deployed OpenSearch is out of scope for pod-level diagnosis, but its HTTP/REST API works identically and remains usable here.
-
-Your job: diagnose, propose a fix as a `recommend` block, stop. You never mutate the cluster or the indices.
-
 ## Protocol
 
-Read [references/shared-contract.md](references/shared-contract.md) first. It defines `read-safe` / `read-heavy` / `recommend` tiers, the read-before-recommend rule, and the `recommend` block schema. Every action you take is governed by it.
+Read [references/shared-contract.md](references/shared-contract.md) first — it governs invocation, action tiers, read-before-recommend, the `recommend` block schema, the symptom-catalogue convention, and the refute contract.
 
-Notes specific to OpenSearch:
+OpenSearch-specific notes:
 
-- Endpoint and credentials come from the Kubernetes deployment (Secret, ConfigMap, or whatever the chart installs). Confirm what the engineer has access to before running any API call. If the cluster is not K8s and only the HTTP API is reachable, the HTTP-side probes below still work, but pod-level introspection does not — recognise that limit and hand back when a symptom needs it.
+- Endpoint and credentials come from the Kubernetes deployment (Secret, ConfigMap, or whatever the chart installs). Confirm what the engineer has access to before running any API call.
 - `_search` and `_update_by_query` against `*` are **`read-heavy`**. Always cap with `size`, time window, or a concrete index pattern. If you can't, demote to `recommend`.
 - Deleting indices, clearing read-only flags, or toggling cluster settings (`cluster.routing.allocation.*`) are mutating. Never run; emit as `recommend` with rollback.
 
@@ -42,21 +38,40 @@ kubectl -n <ns> logs <opensearch-pod> --tail=500 | grep -iE 'error|warn|read.onl
 curl -sk -u <u>:<p> https://<os-host>:9200/_nodes/jvm?pretty | grep -E 'heap_init|heap_max|using_compressed_ordinary_object_pointers'
 ```
 
-Whatever you actually observe becomes the `evidence` field on any `recommend` you emit.
-
 ## Symptom catalogue
 
-Match the report against [references/symptoms.md](references/symptoms.md). Canonical catalogue, do not paraphrase.
+[references/symptoms.md](references/symptoms.md) — match against it; add patterns via `docs/troubleshooting/opensearch.md` in the operator repo first.
 
-Adding new patterns means editing `docs/troubleshooting/opensearch.md` in the operator repo first; do not invent a solution to retrofit into this skill.
+## Zone signal classification (refute contract)
 
-## Zone definition (for the refute contract)
+Walk the four classes in order. Emit on the first match. `secondary_*` classes are rare on OpenSearch — the terminal store usually owns its own pathology; the default is `primary`.
 
-See the [Hypothesis refute](references/shared-contract.md#hypothesis-refute) section in the shared contract for the output shape and triage semantics. The OpenSearch zone is **clean** — and you must refute rather than recommend — when all of these hold:
+**1. CLEAN**
+- Cluster `GREEN`, no unassigned shards.
+- `_cat/allocation` shows `disk.percent` well under all `cluster.routing.allocation.disk.watermark.*` values.
+- No `index.blocks.read_only_allow_delete` flag on indices in scope.
+- Logs clean of mapping / field-limit errors and parser-fed mapping explosions.
+- Heap configuration sane (`heap_max` ≤ 32 GB so compressed-oop is enabled, or above with documented intent).
 
-- Cluster health is GREEN, no unassigned shards.
-- `_cat/allocation` shows disk.percent well under all configured `cluster.routing.allocation.disk.watermark.*` values.
-- No `index.blocks.read_only_allow_delete` flag set on the indices in scope.
-- OpenSearch logs are clean of mapping / field-limit errors (`Limit of total fields ... exceeded`, parser-fed mapping explosions).
-- Heap configuration is sane (`heap_max` ≤ 32 GB so compressed-oop is enabled, or above with documented intent).
-- If the upstream signal points back at this area despite a clean sweep (e.g. Graylog journal accumulating on a healthy OpenSearch), set `likely_downstream_area` to that upstream skill — usually `graylog-server`.
+→ `hypothesis_refuted`, `signal_class: clean`.
+
+**2. QUOTED**
+- Very rare on OpenSearch (terminal store doesn't push). Use only when OS logs explicitly cite an external trigger.
+
+→ `hypothesis_refuted`, `signal_class: secondary_quoted`. Capture verbatim.
+
+**3. BACKPRESSURE** — all of:
+- Shard-write rejection events climbing.
+- Disk well under watermark AND heap within sane bounds AND queue config default / reasonable.
+- No mapping / field-limit errors in logs.
+
+(I.e. OS is healthy by its own standards but still rejecting writes — upstream is dumping more than the cluster can absorb.)
+
+→ `hypothesis_refuted`, `signal_class: secondary_backpressure`.
+
+**4. PRIMARY** (emit `recommend`) — the common path:
+- Mapping / field-limit exceeded by parser-fed schema explosion.
+- Heap above 32 GB (compressed-oop trap).
+- Disk above watermark → read-only blocks.
+- `RED` status from index corruption.
+- ISM / `.opendistro-ism-config` noise, security-config issues.

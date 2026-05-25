@@ -5,17 +5,13 @@ description: Diagnose FluentBit problems in the Qubership logging stack — conn
 
 # Troubleshoot FluentBit
 
-You are the L2 troubleshooting skill for the **FluentBit** knowledge area. Entry points: a handoff from `logging-l2-triage`, or an engineer invoking you directly during a co-debug session. The target cluster is already reachable from the current shell.
-
-Your job: diagnose, propose a fix as a `recommend` block, stop. You never mutate the cluster.
-
 ## Protocol
 
-Read [references/shared-contract.md](references/shared-contract.md) before doing anything else. It defines the `read-safe` / `read-heavy` / `recommend` tiers, the read-before-recommend rule, and the exact `recommend` block schema. Every action you take in this skill is governed by it.
+Read [references/shared-contract.md](references/shared-contract.md) first — it governs invocation, action tiers, read-before-recommend, the `recommend` block schema, the symptom-catalogue convention, and the refute contract.
 
 ## First read-safe sweep
 
-Gather baseline state before consulting the symptom catalogue. Skip steps already covered by the L1 handoff envelope (don't re-collect what the engineer already gave you).
+Skip steps already covered by the L1 handoff envelope.
 
 ```bash
 # FluentBit workload(s). Name varies: standard DaemonSet vs forwarder/aggregator HA.
@@ -35,20 +31,38 @@ kubectl -n <ns> get cm logging-fluentbit -o yaml
 kubectl -n <ns> get pod <pod> -o jsonpath='{.spec.containers[*].resources}'
 ```
 
-Whatever you actually observe becomes the `evidence` field on any `recommend` you emit.
-
 ## Symptom catalogue
 
-Match the report against [references/symptoms.md](references/symptoms.md). That file is the canonical catalogue — patterns, root causes, fixes. Do not paraphrase it back into this SKILL; load it on demand and cite the section you used.
+[references/symptoms.md](references/symptoms.md) — match against it; add patterns via `docs/troubleshooting/fluentbit.md` in the operator repo first.
 
-Adding new patterns means editing `docs/troubleshooting/fluentbit.md` in the operator repo first; do not invent a solution to retrofit into this skill.
+## Zone signal classification (refute contract)
 
-## Zone definition (for the refute contract)
+Walk the four classes in order. Emit on the first match.
 
-See the [Hypothesis refute](references/shared-contract.md#hypothesis-refute) section in the shared contract for the output shape and triage semantics. The FluentBit zone is **clean** — and you must refute rather than recommend — when all of these hold:
+**1. CLEAN**
+- All pods `Running`, no recent `OOMKilled` / `Evicted` / `CrashLoopBackOff`.
+- `kubectl logs --tail=500` clean of errors and warnings (no parser failures, no plugin init errors, no output retries, no panics).
+- Output endpoint configured AND reachable from the pod.
 
-- DaemonSet/StatefulSet pods are `Running`, no `CrashLoopBackOff`, no recent OOMKilled / Evicted in `describe`.
-- `kubectl logs --tail=500` has no FluentBit-side errors (parser failures, ConfigMap reload failures, plugin init errors, internal panics).
-- Resource limits are not throttling the workload (CPU throttling stats clean, memory headroom).
-- The output endpoint (Graylog / FluentBit aggregator / etc.) is reachable from the pod.
-- Any quoted downstream error in FluentBit logs (e.g. an OpenSearch flood-stage message surfaced from Graylog) names another area as the actual owner — set `likely_downstream_area` accordingly.
+→ `hypothesis_refuted`, `signal_class: clean`.
+
+**2. QUOTED**
+- Logs contain a verbatim citation of an external endpoint as the trigger: `[upstream] connection ... timed out`, `no upstream connections available`, `getaddrinfo <host>`, `connection refused to <host>`, or similar naming a host/port.
+
+→ `hypothesis_refuted`, `signal_class: secondary_quoted`. Capture each quote verbatim in `cited_external_components`.
+
+**3. BACKPRESSURE** — all of:
+- Pods `OOMKilled` OR repeatedly restarting on OOM.
+- Output stanza present in the ConfigMap AND output endpoint reachable from the pod.
+- Memory limit is tight for the workload: **forwarder DaemonSet ≤ 128Mi**, **aggregator StatefulSet ≤ 512Mi**.
+- **AND a positive backpressure signal**: `kubectl logs --tail=500` shows output write errors or connection retries to the output target, OR FluentBit `/api/v1/metrics` shows non-zero growing `fluentbit_output_retries_total` / `fluentbit_output_dropped_records_total`.
+
+→ `hypothesis_refuted`, `signal_class: secondary_backpressure`.
+
+The positive-signal requirement is what separates this class from PRIMARY. OOM at a tight limit without any visible retry / error / dropped-records signal is just "memory misconfig" → PRIMARY. OOM at a tight limit AND output is visibly failing to drain = backpressure.
+
+**4. PRIMARY** (everything else with a signal — emit `recommend`):
+- ConfigMap reload error / parser failure / plugin init crash / internal panic.
+- Pods `Evicted` for non-memory reasons (disk pressure on host).
+- `OOMKilled` but memory limit is NOT tight by step-3 thresholds — treat as misconfig / leak, not backpressure.
+- Output not configured, or output endpoint genuinely unreachable (DNS / network — distinct from a quoted refusal).

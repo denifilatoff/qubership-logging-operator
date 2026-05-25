@@ -24,6 +24,7 @@ Use this table only after the [initial sweep](../SKILL.md#initial-read-safe-swee
 | Graylog widget error mentioning `fielddata=true` / `Text fields are not optimized` | Widget UI or Graylog logs | `graylog-server-troubleshoot` | high |
 | Graylog UI: System → Nodes shows OpenSearch nodes info unavailable, click reveals TLS / cert error | Graylog UI / Graylog logs | `graylog-server-troubleshoot` (TLS path) | medium |
 | Graylog logs `Active write index for index set ... doesn't exist yet` | `kubectl logs <graylog-pod>` | `graylog-server-troubleshoot` (deflector case) | medium |
+| Graylog logs `TooLongFrameException` or input-side drop / oversized-frame warnings | `kubectl logs <graylog-pod> \| grep -iE 'TooLongFrame\|max_message_size\|drop'` | `graylog-server-troubleshoot` (GELF input frame-size case) | high |
 | Graylog/OpenSearch PVC ≥95% full, or node-level `DiskPressure=True` on the node hosting Graylog/OpenSearch | `kubectl describe pvc` / `kubectl get nodes` conditions | `graylog-server-troubleshoot` → then `graylog-disk-usage-investigate` for the breakdown | high |
 | Engineer asks "which microservice is filling our logs", "who's the noisiest producer" — independent of any failure | engineer's question, no failure required | `graylog-disk-usage-investigate` directly | high |
 | OpenSearch cluster status RED or YELLOW with unassigned shards | `curl /_cluster/health` | `opensearch-troubleshoot` | high |
@@ -42,20 +43,41 @@ Triage always emits a **ranked list of candidates** (length ≥ 1), not a single
 - **No row fires** after a complete sweep → don't invent a target. Apply a **class-level fallback chain** (next section) if the symptom matches one; otherwise emit a `recommend` for manual diagnosis with the sweep attached and stop.
 - **Sweep partially blocked** (RBAC, endpoint down) → escalate to the engineer; the read-before-recommend rule applies to triage too.
 
-## Downstream-error-in-upstream-log
+## Stack topology
 
-When a collector or facade logs a quoted error message that names a **downstream component or downstream concept** (write block, watermark, refused connection from address X, "queue full on Y"), treat that as a positive routing signal toward the **named downstream area**, not toward the component that logged the message. The component logging the error is the messenger.
+The logging stack's data path. Used to derive the next hop when a leaf returns a `secondary_*` refute. Replacing a backend (Loki, Victoria Logs, Splunk) means replacing this table — the routing rules below do not change shape.
 
-Concrete instances (non-exhaustive — the principle is the rule, not the list):
-
-| Quoted message surface | Logged by | Route to |
+| Producer | Buffers in | Pushes to |
 |---|---|---|
-| `disk usage exceeded flood-stage watermark`, `cluster_block_exception`, `FORBIDDEN/12/index read-only` | Graylog, FluentBit, FluentD | `opensearch-troubleshoot` |
-| `connection refused` / `getaddrinfo` naming the Graylog host | FluentBit, FluentD | `graylog-server-troubleshoot` |
-| `Data too big`, `more than 128 chunks` referencing OpenSearch | FluentD | `opensearch-troubleshoot` (heap / shard limits), then `fluentd-troubleshoot` |
-| MongoDB connection errors quoted from Graylog | Graylog | mongodb area (no skill yet — escalate per "Areas not covered yet") |
+| application pods | — | fluentbit |
+| fluentbit (forwarder DaemonSet) | tail-based buffer | graylog (or fluentbit-aggregator → graylog in HA mode) |
+| fluentbit (aggregator StatefulSet) | aggregator buffer | graylog |
+| fluentd | hardcoded ~1Gi buffer | graylog |
+| graylog | disk journal | opensearch |
+| opensearch | shard-write queue | terminal |
 
-This is in addition to the row-based table above: a downstream-error quote can fire even when the matching row in the seed table requires a probe the agent hasn't run yet. The downstream area's skill is the one that confirms; triage just routes.
+Skill assignment for hops: `fluentbit*` → `fluentbit-troubleshoot`, `fluentd` → `fluentd-troubleshoot`, `graylog` → `graylog-server-troubleshoot`, `opensearch` → `opensearch-troubleshoot`.
+
+## Routing on a refute (`signal_class` → next hop)
+
+When a leaf returns `hypothesis_refuted`, derive the next chain step from the refute body — do not re-run the seed table:
+
+- **`signal_class: clean`** — leaf zone healthy. Advance to the next candidate already in the ranked list. If the list is exhausted, apply the class-level fallback chain for the symptom class; if no chain matches, escalate.
+- **`signal_class: secondary_backpressure`** — leaf is buffering under outside pressure. Next hop = the immediate downstream of the refuted zone per the topology table, if not yet walked in this chain. If that downstream has already been walked and refuted, walk one more hop downstream. The promoted candidate goes to the top of the remaining list — even if the seed table didn't surface it.
+- **`signal_class: secondary_quoted`** — look up each entry in `cited_external_components` against the cited-string map below. Each match adds a candidate; promote matched candidates to the top of the remaining list. If no entry matches, treat the refute as `clean`.
+
+A `secondary_*` refute may insert a candidate that was not in the original ranked list. That is the chain extending dynamically on evidence — do not refuse to walk a non-seeded candidate.
+
+### Cited-string → area map (for `secondary_quoted`)
+
+| Quoted message / component | Route to |
+|---|---|
+| `disk usage exceeded flood-stage watermark`, `cluster_block_exception`, `FORBIDDEN/12/index read-only` | `opensearch-troubleshoot` |
+| `connection refused` / `getaddrinfo` naming the Graylog host or port | `graylog-server-troubleshoot` |
+| `Data too big`, `more than 128 chunks` (GELF protocol) | `graylog-server-troubleshoot` (input frame size); also `opensearch-troubleshoot` if the quote references shard limits |
+| MongoDB connection error quoted from Graylog | mongodb area (no skill yet — escalate per "Areas not covered yet") |
+
+The principle is the rule, not the list. Extend the map as new external-trigger quotes surface in real cases.
 
 ## Class-level fallback chains
 

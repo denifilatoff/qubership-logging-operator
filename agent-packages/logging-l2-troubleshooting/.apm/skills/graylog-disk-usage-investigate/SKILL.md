@@ -5,13 +5,11 @@ description: Produce a ranked breakdown of who is filling Graylog/OpenSearch dis
 
 # Investigate Graylog disk usage
 
-Focused diagnostic procedure: **given a time window, list the producers contributing the most bytes of logs to Graylog/OpenSearch storage, ranked.** The output feeds a retention / quota / parser-fix decision — it does not make that decision.
-
-This is a narrow investigation skill, not a full knowledge area. It can be called standalone by the engineer ("rank producers by volume for the last 24h") or as a sub-step by `graylog-server-troubleshoot` after the "HDD Full" symptom is confirmed.
+Given a time window, list the producers contributing the most bytes of logs to Graylog/OpenSearch storage, ranked. Do not act on the breakdown — the retention / quota / parser-fix decision is the operator's.
 
 ## Protocol
 
-Read [references/shared-contract.md](references/shared-contract.md). All commands here are `read-safe` or `read-heavy` (terms-aggregations on log indices). Nothing here mutates state — but several queries qualify as `read-heavy` and need caps.
+Read [references/shared-contract.md](references/shared-contract.md) first. All commands here are `read-safe` or `read-heavy` (terms-aggregations on log indices); nothing mutates state, but several queries need caps.
 
 ## Input contract
 

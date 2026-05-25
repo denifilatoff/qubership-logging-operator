@@ -5,13 +5,7 @@ description: L1 triage and routing of incoming Qubership logging-stack support t
 
 # logging-l1-triage
 
-L1 (Level 1) triage gatekeeper for Qubership logging-stack support
-tickets. The job is to **decide what should happen next** for a
-ticket — not to fix anything.
-
 ## Hard constraints
-
-These are not stylistic preferences. They define what L1 is.
 
 1. **No system access.** Do not run `kubectl`, SSH, `curl` against
    live endpoints, `docker`, `helm`, or anything else that touches a
@@ -37,14 +31,6 @@ These are not stylistic preferences. They define what L1 is.
    the area still ambiguous, escalate with
    `knowledge_area: ambiguous` and a ranked hypothesis list. Do not
    start a multi-turn interview.
-
-The cost of these constraints is occasional over-escalation. The cost
-of relaxing them is mistaken action on production systems and lost
-audit trail. Constraints 1, 3, and 4 are a permanent L1-vs-L2
-separation, not a maturity stopgap. Constraint 2 may evolve once an
-explicit autonomy policy exists and the trivial-cases KB has been
-audited against incident data — until then, treat its boundary as
-fixed.
 
 ## Decision flow
 

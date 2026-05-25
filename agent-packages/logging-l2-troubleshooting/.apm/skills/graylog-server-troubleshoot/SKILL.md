@@ -5,20 +5,12 @@ description: Diagnose Graylog server problems in the Qubership logging stack —
 
 # Troubleshoot Graylog server
 
-You are the L2 troubleshooting skill for the **Graylog server** knowledge area — the Graylog process and web UI, the disk journal, the indexer alias (`_deflector`), input management, and the immediate environment around the Graylog container (browser path, ingress, TLS to OpenSearch nodes). Entry points: handoff from `logging-l2-triage`, or engineer-driven invocation.
-
-Many Graylog symptoms have a root cause downstream in OpenSearch (HDD full, mapping limit, read-only indices) or upstream in the collector (FluentD/FluentBit). Your job is to **localize the cause to one area** before recommending anything. If the cause is OpenSearch or the collectors, surface the finding and hand back to the engineer.
-
-Diagnose, propose a fix as a `recommend` block, stop. You never mutate the system.
-
 ## Protocol
 
-Read [references/shared-contract.md](references/shared-contract.md) first. `read-safe` / `read-heavy` / `recommend`, read-before-recommend, exact block schema. Everything you do is governed by it.
+Read [references/shared-contract.md](references/shared-contract.md) first — it governs invocation, action tiers, read-before-recommend, the `recommend` block schema, the symptom-catalogue convention, and the refute contract.
 
 Graylog-specific notes:
 
-- This skill targets a Kubernetes deployment. VM-deployed Graylog (Docker-on-VM, SSH access, `/srv/docker/graylog/*`) is out of scope for diagnosis — per the methodology's K8s-only invariant. The HTTP/REST API at `/api/...`, however, works regardless of where Graylog runs, and remains the primary diagnostic surface here.
-- If the engineer's environment turns out to be VM-deployed and the symptom needs pod / container introspection (`kubectl logs`, `kubectl exec`, container fs), say so and hand back. Do not extrapolate cluster state from the HTTP API alone.
 - Restarting the Graylog pod, deleting journal data, stopping inputs from the UI, and patching `graylog.conf` are all mutating. Emit as `recommend` with rollback.
 - API calls against `/api/system/indexer/indices` with `DELETE`, or any write to `/_settings`, are mutating.
 
@@ -44,25 +36,44 @@ curl -sk -u <u>:<p> https://<graylog>/api/system/indexer/indices | head -200
 curl -sk -u <u>:<p> https://<graylog>/api/system/inputstates
 ```
 
-Whatever you actually observe becomes the `evidence` field on any `recommend` you emit. If the journal is large or growing, capture two readings spaced ~30 s apart — the trend matters more than the absolute number.
+If the journal is large or growing, capture two readings spaced ~30 s apart — the trend matters more than the absolute number.
 
 ## Symptom catalogue
 
-Match the report against [references/symptoms.md](references/symptoms.md). Canonical catalogue, do not paraphrase.
+[references/symptoms.md](references/symptoms.md) — match against it; add patterns via `docs/troubleshooting/graylog.md` in the operator repo first.
 
-Adding new patterns means editing `docs/troubleshooting/graylog.md` first; do not invent a solution to retrofit into this skill.
+## Zone signal classification (refute contract)
 
-## Zone definition (for the refute contract)
+Walk the four classes in order. Emit on the first match.
 
-See the [Hypothesis refute](references/shared-contract.md#hypothesis-refute) section in the shared contract for the output shape and triage semantics. The Graylog-server zone is **clean** — and you must refute rather than recommend — when all of these hold:
+**1. CLEAN**
+- Pods `Running`, web UI reachable, no recent restarts / OOM.
+- Journal size stable across two readings ~30s apart, "unprocessed messages" not climbing.
+- Inputs `RUNNING` per `/api/system/inputstates`.
+- OpenSearch nodes reachable per `/api/system/cluster/nodes`; no TLS errors to OpenSearch.
+- No deflector / widget / fielddata / input-drop / parsing-failure warnings in `kubectl logs --tail=500`.
 
-- Server pods `Running`, no recent restarts / OOM, web UI reachable, no ingress/TLS errors.
-- Journal size is healthy and not growing; "unprocessed messages" is not climbing.
-- Inputs are `RUNNING` per `/api/system/inputstates`; no input-side drops attributable to Graylog config (e.g. `max_message_size` not the constraint for the symptom).
-- No deflector / alias / widget / fielddata errors in Graylog logs or UI.
-- OpenSearch nodes info reachable per `/api/system/cluster/nodes`, no TLS errors to OpenSearch.
-- If indexer logs quote a downstream area (OpenSearch read-only block, MongoDB connection refused), set `likely_downstream_area` to that area.
+→ `hypothesis_refuted`, `signal_class: clean`.
+
+**2. QUOTED**
+- Graylog indexer or input logs cite an external system explicitly: `cluster_block_exception`, `FORBIDDEN/12/index read-only`, MongoDB connection errors, OpenSearch HTTP / TLS errors naming a host.
+
+→ `hypothesis_refuted`, `signal_class: secondary_quoted`. Capture verbatim in `cited_external_components`.
+
+**3. BACKPRESSURE** — all of:
+- Journal size growing across two readings ~30s apart AND "unprocessed messages" climbing.
+- Graylog itself is healthy (pods `Running`, no recent restarts / OOM, inputs `RUNNING`).
+- No internal Graylog error explains the slowdown (no deflector / widget / TLS / parse error in logs).
+
+→ `hypothesis_refuted`, `signal_class: secondary_backpressure`. The journal is Graylog's downstream buffer; sustained growth on a healthy Graylog means the store isn't draining.
+
+**4. PRIMARY** (emit `recommend`):
+- Input-side warnings about dropped messages or oversized frames (e.g. GELF input `max_message_size` too small).
+- Deflector / alias / widget / fielddata errors ("Deflector exists as an index", "Active write index doesn't exist yet").
+- Container OOM not related to journal.
+- Ingress / TLS misconfig, web UI 502 / 504.
+- ConfigMap typo causing restart.
 
 ## Investigating disk pressure specifically
 
-If the symptom is "Graylog/OpenSearch storage running out of space" (PVC near full, node `DiskPressure=True`) and the engineer wants to know **which producers are filling the disk** (not just "free space, restart"), that is a focused diagnostic procedure — call the `graylog-disk-usage-investigate` skill from this package. It exists exactly for that breakdown.
+If the engineer wants to know **which producers are filling the disk** (not just "free space, restart"), call the `graylog-disk-usage-investigate` skill from this package.
