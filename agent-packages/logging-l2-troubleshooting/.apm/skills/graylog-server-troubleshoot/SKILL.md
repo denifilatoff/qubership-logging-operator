@@ -42,37 +42,28 @@ If the journal is large or growing, capture two readings spaced ~30 s apart — 
 
 [references/symptoms.md](references/symptoms.md) — match against it; add patterns via `docs/troubleshooting/graylog.md` in the operator repo first.
 
-## Zone signal classification (refute contract)
+## Lookup and output
 
-Walk the four classes in order. Emit on the first match.
+1. Take the diagnostic-pass output above.
+2. For each entry in [references/symptoms.md](references/symptoms.md), evaluate its `match` block against the diagnostic-pass output. Collect every entry that matches.
+3. Emit the result in the schema from [references/shared-contract.md](references/shared-contract.md#expert-output-schema):
 
-**1. CLEAN**
-- Pods `Running`, web UI reachable, no recent restarts / OOM.
-- Journal size stable across two readings ~30s apart, "unprocessed messages" not climbing.
-- Inputs `RUNNING` per `/api/system/inputstates`.
-- OpenSearch nodes reachable per `/api/system/cluster/nodes`; no TLS errors to OpenSearch.
-- No deflector / widget / fielddata / input-drop / parsing-failure warnings in `kubectl logs --tail=500`.
+```yaml
+findings:
+  - symptom_id: <id of the matched entry>
+    evidence: |
+      <verbatim lines / values referenced by the entry's evidence_template>
+    proposed_fix: |
+      <proposed_fix from the entry, instantiated with any concrete values>
+raw_diagnostic_pass: |
+  <abbreviated digest of the diagnostic-pass output above>
+```
 
-→ `hypothesis_refuted`, `signal_class: clean`.
+If the matched entry's `proposed_fix` warrants a structured operator action, also emit a `recommend` block per the shared contract, citing the matched `symptom_id` in `why`.
 
-**2. QUOTED**
-- Graylog indexer or input logs cite an external system explicitly: `cluster_block_exception`, `FORBIDDEN/12/index read-only`, MongoDB connection errors, OpenSearch HTTP / TLS errors naming a host.
+## Anti-fabrication
 
-→ `hypothesis_refuted`, `signal_class: secondary_quoted`. Capture verbatim in `cited_external_components`.
-
-**3. BACKPRESSURE** — all of:
-- Journal size growing across two readings ~30s apart AND "unprocessed messages" climbing.
-- Graylog itself is healthy (pods `Running`, no recent restarts / OOM, inputs `RUNNING`).
-- No internal Graylog error explains the slowdown (no deflector / widget / TLS / parse error in logs).
-
-→ `hypothesis_refuted`, `signal_class: secondary_backpressure`. The journal is Graylog's downstream buffer; sustained growth on a healthy Graylog means the store isn't draining.
-
-**4. PRIMARY** (emit `recommend`):
-- Input-side warnings about dropped messages or oversized frames (e.g. GELF input `max_message_size` too small).
-- Deflector / alias / widget / fielddata errors ("Deflector exists as an index", "Active write index doesn't exist yet").
-- Container OOM not related to journal.
-- Ingress / TLS misconfig, web UI 502 / 504.
-- ConfigMap typo causing restart.
+If no entry in the catalogue matches, return `findings: []` with a non-empty `raw_diagnostic_pass` digest. Do not invent a `symptom_id`. Do not infer or speculate. Do not emit a `recommend`. An empty `findings` array is a valid and expected outcome — the orchestrator handles routing from there.
 
 ## Investigating disk pressure specifically
 
