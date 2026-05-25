@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../lib.sh"
 
 NS="logging"
-SNAPSHOT="$STATE_DIR/F1-fluent-config-syntax.snapshot.yaml"
+SNAPSHOT="$STATE_DIR/fluentbit-config-syntax.snapshot.yaml"
 
 [[ -f "$SNAPSHOT" ]] || die "no snapshot at $SNAPSHOT — was apply.sh ever run?"
 

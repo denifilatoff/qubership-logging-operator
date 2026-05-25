@@ -10,10 +10,10 @@ GL_NS="logging"
 GL_SVC="graylog-service"
 LG_NS="log-generator"
 LG_SVC="qubership-log-generator-service"
-SNAPSHOT="$STATE_DIR/F7-gelf-input-size.snapshot.json"
-MARKER_FILE="$STATE_DIR/F7-gelf-input-size.marker"
+SNAPSHOT="$STATE_DIR/graylog-gelf-input-size-too-small.snapshot.json"
+MARKER_FILE="$STATE_DIR/graylog-gelf-input-size-too-small.marker"
 NEW_LIMIT=1024
-MARKER="F7-$(date +%s)-$RANDOM"
+MARKER="gelf-stress-$(date +%s)-$RANDOM"
 
 # REST calls go through an ephemeral pod so we don't depend on a
 # port-forward and the X-Requested-By header (Graylog CSRF guard) is

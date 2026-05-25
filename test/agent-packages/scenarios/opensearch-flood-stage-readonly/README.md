@@ -1,4 +1,4 @@
-# F3 — OpenSearch flood-stage: indices read-only
+# OpenSearch flood-stage: indices read-only
 
 **Backend required**: `graylog`
 

@@ -1,4 +1,4 @@
-# F4 — Helm: bad image tag on logging-operator
+# Helm: bad image tag on logging-operator
 
 ## Case
 

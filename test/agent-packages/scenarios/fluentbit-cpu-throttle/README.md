@@ -1,4 +1,4 @@
-# F5b — FluentBit CPU throttling: ingest backlog, messages lost
+# FluentBit CPU throttling: ingest backlog, messages lost
 
 **Backend required**: `graylog`
 

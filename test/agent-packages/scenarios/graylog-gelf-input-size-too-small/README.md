@@ -1,4 +1,4 @@
-# F7 — Graylog GELF input: `max_message_size` too small, big logs dropped
+# Graylog GELF input: `max_message_size` too small, big logs dropped
 
 **Backend required**: `graylog`
 

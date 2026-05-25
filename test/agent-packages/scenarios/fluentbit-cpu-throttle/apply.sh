@@ -34,7 +34,7 @@ log "waiting for daemonset rollout"
 "${KUBECTL[@]}" -n "$NS" rollout status ds -l name=logging-fluentbit --timeout=300s || true
 
 log "driving load: $LOAD_MSG_PER_SEC msg/s for ${LOAD_GEN_TIME}s via qubership-log-generator"
-LG_BODY=$(printf '{"message":"F5b-stress","genTime":%d,"msgPerSec":%d}' "$LOAD_GEN_TIME" "$LOAD_MSG_PER_SEC")
+LG_BODY=$(printf '{"message":"fluentbit-cpu-throttle-stress","genTime":%d,"msgPerSec":%d}' "$LOAD_GEN_TIME" "$LOAD_MSG_PER_SEC")
 "${KUBECTL[@]}" -n log-generator run "lg-curl-$RANDOM" \
   --rm -i --restart=Never --quiet \
   --image=curlimages/curl:8.10.1 \

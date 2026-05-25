@@ -1,4 +1,4 @@
-# F2 — FluentBit OOMKilled
+# FluentBit OOMKilled
 
 ## Case
 

@@ -8,8 +8,8 @@ require_backend graylog
 
 GL_NS="logging"
 GL_SVC="graylog-service"
-SNAPSHOT="$STATE_DIR/F7-gelf-input-size.snapshot.json"
-MARKER_FILE="$STATE_DIR/F7-gelf-input-size.marker"
+SNAPSHOT="$STATE_DIR/graylog-gelf-input-size-too-small.snapshot.json"
+MARKER_FILE="$STATE_DIR/graylog-gelf-input-size-too-small.marker"
 
 [[ -f "$SNAPSHOT" ]] || die "no snapshot at $SNAPSHOT — was apply.sh ever run?"
 

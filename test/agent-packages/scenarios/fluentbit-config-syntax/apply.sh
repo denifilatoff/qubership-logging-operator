@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../lib.sh"
 
 NS="logging"
-SNAPSHOT="$STATE_DIR/F1-fluent-config-syntax.snapshot.yaml"
+SNAPSHOT="$STATE_DIR/fluentbit-config-syntax.snapshot.yaml"
 
 # If anything below fails, restore the operator so the cluster does not get
 # stuck with replicas=0. The CM may still be broken — that's recoverable, an
@@ -60,7 +60,7 @@ log "injecting broken token into key '$KEY'"
 import json, sys
 d = json.load(sys.stdin)
 k = '$KEY'
-d['data'][k] = '@@@-fixture-F1-broken-syntax-@@@\n' + d['data'][k]
+d['data'][k] = '@@@-fixture-broken-syntax-@@@\n' + d['data'][k]
 print(json.dumps(d))
 " | "${KUBECTL[@]}" -n "$NS" apply -f -
 

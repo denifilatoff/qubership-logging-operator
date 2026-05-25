@@ -1,4 +1,4 @@
-# F1 — FluentBit ConfigMap syntax error
+# FluentBit ConfigMap syntax error
 
 ## Case
 

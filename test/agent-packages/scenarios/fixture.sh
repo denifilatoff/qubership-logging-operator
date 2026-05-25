@@ -21,8 +21,9 @@ usage() {
 }
 
 cmd_list() {
-  for d in "$SCRIPT_DIR"/F*/; do
+  for d in "$SCRIPT_DIR"/*/; do
     local id; id="$(basename "$d")"
+    [[ "$id" == ".state" ]] && continue
     local mark="  "
     is_active "$id" && mark="* "
     local desc=""

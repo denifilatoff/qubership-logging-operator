@@ -6,7 +6,7 @@ source "$SCRIPT_DIR/../lib.sh"
 
 require_backend graylog
 
-SNAPSHOT="$STATE_DIR/F3-disk-readonly.snapshot.json"
+SNAPSHOT="$STATE_DIR/opensearch-flood-stage-readonly.snapshot.json"
 OS_NS="opensearch"
 OS_SVC="opensearch"   # ClusterIP svc inside the opensearch namespace
 
