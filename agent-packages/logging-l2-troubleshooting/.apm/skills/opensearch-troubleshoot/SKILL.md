@@ -42,36 +42,25 @@ curl -sk -u <u>:<p> https://<os-host>:9200/_nodes/jvm?pretty | grep -E 'heap_ini
 
 [references/symptoms.md](references/symptoms.md) — match against it; add patterns via `docs/troubleshooting/opensearch.md` in the operator repo first.
 
-## Zone signal classification (refute contract)
+## Lookup and output
 
-Walk the four classes in order. Emit on the first match. `secondary_*` classes are rare on OpenSearch — the terminal store usually owns its own pathology; the default is `primary`.
+1. Take the diagnostic-pass output above.
+2. For each entry in [references/symptoms.md](references/symptoms.md), evaluate its `match` block against the diagnostic-pass output. Collect every entry that matches.
+3. Emit the result in the schema from [references/shared-contract.md](references/shared-contract.md#expert-output-schema):
 
-**1. CLEAN**
-- Cluster `GREEN`, no unassigned shards.
-- `_cat/allocation` shows `disk.percent` well under all `cluster.routing.allocation.disk.watermark.*` values.
-- No `index.blocks.read_only_allow_delete` flag on indices in scope.
-- Logs clean of mapping / field-limit errors and parser-fed mapping explosions.
-- Heap configuration sane (`heap_max` ≤ 32 GB so compressed-oop is enabled, or above with documented intent).
+```yaml
+findings:
+  - symptom_id: <id of the matched entry>
+    evidence: |
+      <verbatim lines / values referenced by the entry's evidence_template>
+    proposed_fix: |
+      <proposed_fix from the entry, instantiated with any concrete values>
+raw_diagnostic_pass: |
+  <abbreviated digest of the diagnostic-pass output above>
+```
 
-→ `hypothesis_refuted`, `signal_class: clean`.
+If the matched entry's `proposed_fix` warrants a structured operator action, also emit a `recommend` block per the shared contract, citing the matched `symptom_id` in `why`.
 
-**2. QUOTED**
-- Very rare on OpenSearch (terminal store doesn't push). Use only when OS logs explicitly cite an external trigger.
+## Anti-fabrication
 
-→ `hypothesis_refuted`, `signal_class: secondary_quoted`. Capture verbatim.
-
-**3. BACKPRESSURE** — all of:
-- Shard-write rejection events climbing.
-- Disk well under watermark AND heap within sane bounds AND queue config default / reasonable.
-- No mapping / field-limit errors in logs.
-
-(I.e. OS is healthy by its own standards but still rejecting writes — upstream is dumping more than the cluster can absorb.)
-
-→ `hypothesis_refuted`, `signal_class: secondary_backpressure`.
-
-**4. PRIMARY** (emit `recommend`) — the common path:
-- Mapping / field-limit exceeded by parser-fed schema explosion.
-- Heap above 32 GB (compressed-oop trap).
-- Disk above watermark → read-only blocks.
-- `RED` status from index corruption.
-- ISM / `.opendistro-ism-config` noise, security-config issues.
+If no entry in the catalogue matches, return `findings: []` with a non-empty `raw_diagnostic_pass` digest. Do not invent a `symptom_id`. Do not infer or speculate. Do not emit a `recommend`. An empty `findings` array is a valid and expected outcome — the orchestrator handles routing from there.
