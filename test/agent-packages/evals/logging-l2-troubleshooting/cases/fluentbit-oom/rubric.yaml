@@ -25,12 +25,12 @@ checks:
       and emits a recommend rather than a hypothesis_refuted.
 
       This is the inverse of the cascade-refute check used elsewhere:
-      here the leaf must NOT refute, because there is no downstream
-      cause. The BACKPRESSURE class in the leaf's decision tree
+      here the expert must NOT refute, because there is no downstream
+      cause. The BACKPRESSURE class in the expert's decision tree
       requires a positive backpressure signal (output retries
       climbing, dropped records, connection errors) in addition to
       OOM + tight limit + reachable output. In this scenario none of
-      those positive signals are present, so the leaf must fall
+      those positive signals are present, so the expert must fall
       through to PRIMARY.
 
       Pass-fail procedure (apply literally):
@@ -55,10 +55,10 @@ checks:
       5. PASS only if step 3 finds a recommend block AND step 4
          finds no refute block. FAIL otherwise — in particular, FAIL
          when:
-           - the leaf emitted `hypothesis_refuted: true` with any
+           - the expert emitted `hypothesis_refuted: true` with any
              `signal_class` (the design says primary triggers
              recommend, not refute);
-           - the leaf emitted neither a recommend nor a refute;
+           - the expert emitted neither a recommend nor a refute;
            - both a recommend and a refute appear in the same hop
              (contract violation: they are mutually exclusive).
   - id: recommend-emitted

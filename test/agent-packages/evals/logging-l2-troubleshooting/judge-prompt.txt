@@ -50,12 +50,12 @@ To locate a specific area skill's output: find its Skill call in
 and the next Skill call (or, for the last invocation, between the call
 and the final `result`).
 
-Refute / recommend YAML schemas (canonical shapes the leaves emit):
+Refute / recommend YAML schemas (canonical shapes the experts emit):
 
   hypothesis_refuted: true
   skill: <skill-name>
   signal_class: clean | secondary_backpressure | secondary_quoted
-  sweep_evidence: |
+  diagnostic_pass_evidence: |
     ...
   cited_external_components:
     - ...

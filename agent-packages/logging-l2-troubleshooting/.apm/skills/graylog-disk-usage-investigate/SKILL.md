@@ -26,7 +26,7 @@ The caller (engineer or another skill) must supply, or you must ask for:
 
 If the engineer didn't specify, propose defaults (window = last 24h, scope = active write indices, grouping = `container_name`, N = 20) and confirm before querying.
 
-## First read-safe sweep
+## First read-safe diagnostic pass
 
 ```bash
 # Indices and current sizes — this picks the candidate index scope.

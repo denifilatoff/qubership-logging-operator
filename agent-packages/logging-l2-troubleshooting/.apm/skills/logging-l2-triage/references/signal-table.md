@@ -1,10 +1,10 @@
 # L2 triage signal table
 
-Maps observations from the initial read-safe sweep to the knowledge-area skill that should run next.
+Maps observations from the initial read-safe diagnostic pass to the knowledge-area skill that should run next.
 
 Each row carries a **prior**: SME-observed base rate that this signal corresponds to the listed cause. Rank candidates by `match strength × prior`, not by match alone. Priors are seeded by SME estimate and will be recalibrated as real cases close — treat the current values as starting points, not ground truth.
 
-Use this table only after the [initial sweep](../SKILL.md#initial-read-safe-sweep) has produced concrete observations. Do **not** match against ticket text here — that is L1's job; L2 matches against what the cluster actually shows.
+Use this table only after the [initial diagnostic pass](../SKILL.md#initial-read-safe-diagnostic-pass) has produced concrete observations. Do **not** match against ticket text here — that is L1's job; L2 matches against what the cluster actually shows.
 
 ## Seed table (v0.1)
 
@@ -40,12 +40,12 @@ Triage always emits a **ranked list of candidates** (length ≥ 1), not a single
 - **One row fires** → ranked list of length 1. Case is overdetermined; primary is unique; no fallback.
 - **Multiple rows, same target** → length 1, raise confidence.
 - **Multiple rows, different targets** → length ≥ 2, ranked by `match × prior`. Primary first; the rest are successors.
-- **No row fires** after a complete sweep → don't invent a target. Apply a **class-level fallback chain** (next section) if the symptom matches one; otherwise emit a `recommend` for manual diagnosis with the sweep attached and stop.
-- **Sweep partially blocked** (RBAC, endpoint down) → escalate to the engineer; the read-before-recommend rule applies to triage too.
+- **No row fires** after a complete diagnostic pass → don't invent a target. Apply a **class-level fallback chain** (next section) if the symptom matches one; otherwise emit a `recommend` for manual diagnosis with the diagnostic pass attached and stop.
+- **Diagnostic pass partially blocked** (RBAC, endpoint down) → escalate to the engineer; the read-before-recommend rule applies to triage too.
 
 ## Stack topology
 
-The logging stack's data path. Used to derive the next hop when a leaf returns a `secondary_*` refute. Replacing a backend (Loki, Victoria Logs, Splunk) means replacing this table — the routing rules below do not change shape.
+The logging stack's data path. Used to derive the next hop when a expert returns a `secondary_*` refute. Replacing a backend (Loki, Victoria Logs, Splunk) means replacing this table — the routing rules below do not change shape.
 
 | Producer | Buffers in | Pushes to |
 |---|---|---|
@@ -60,10 +60,10 @@ Skill assignment for hops: `fluentbit*` → `fluentbit-troubleshoot`, `fluentd` 
 
 ## Routing on a refute (`signal_class` → next hop)
 
-When a leaf returns `hypothesis_refuted`, derive the next chain step from the refute body — do not re-run the seed table:
+When a expert returns `hypothesis_refuted`, derive the next chain step from the refute body — do not re-run the seed table:
 
-- **`signal_class: clean`** — leaf zone healthy. Advance to the next candidate already in the ranked list. If the list is exhausted, apply the class-level fallback chain for the symptom class; if no chain matches, escalate.
-- **`signal_class: secondary_backpressure`** — leaf is buffering under outside pressure. Next hop = the immediate downstream of the refuted zone per the topology table, if not yet walked in this chain. If that downstream has already been walked and refuted, walk one more hop downstream. The promoted candidate goes to the top of the remaining list — even if the seed table didn't surface it.
+- **`signal_class: clean`** — expert zone healthy. Advance to the next candidate already in the ranked list. If the list is exhausted, apply the class-level fallback chain for the symptom class; if no chain matches, escalate.
+- **`signal_class: secondary_backpressure`** — expert is buffering under outside pressure. Next hop = the immediate downstream of the refuted zone per the topology table, if not yet walked in this chain. If that downstream has already been walked and refuted, walk one more hop downstream. The promoted candidate goes to the top of the remaining list — even if the seed table didn't surface it.
 - **`signal_class: secondary_quoted`** — look up each entry in `cited_external_components` against the cited-string map below. Each match adds a candidate; promote matched candidates to the top of the remaining list. If no entry matches, treat the refute as `clean`.
 
 A `secondary_*` refute may insert a candidate that was not in the original ranked list. That is the chain extending dynamically on evidence — do not refuse to walk a non-seeded candidate.
@@ -93,7 +93,7 @@ Skip steps in the chain whose component isn't deployed in this cluster (e.g. no 
 
 ## Areas not covered yet
 
-The following appear in the L2 methodology (§3) but have no skill in this package yet, because their reference guide is empty. If the sweep clearly indicates one of these, hand back to the engineer with the observation and stop — do **not** route to a nearby skill as a substitute:
+The following appear in the L2 methodology (§3) but have no skill in this package yet, because their reference guide is empty. If the diagnostic pass clearly indicates one of these, hand back to the engineer with the observation and stop — do **not** route to a nearby skill as a substitute:
 
 - `victoria-logs-troubleshoot`
 - `mongodb-troubleshoot` — common signals: Graylog logs full of MongoDB connection errors, Mongo container restarting.

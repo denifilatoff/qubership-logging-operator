@@ -10,7 +10,7 @@ See `evals/` for the L2 eval pipeline and `docs/eval-pipeline-design.md` for its
 
 | Skill | Role | When |
 |---|---|---|
-| [`logging-l2-triage`](.apm/skills/logging-l2-triage/SKILL.md) | Entry point / router | Any live troubleshooting session — runs a read-safe sweep, picks the right knowledge-area skill, hands off. Use this first; do not jump straight into a `*-troubleshoot` skill from a free-form complaint. |
+| [`logging-l2-triage`](.apm/skills/logging-l2-triage/SKILL.md) | Entry point / router | Any live troubleshooting session — runs a read-safe diagnostic pass, picks the right knowledge-area skill, hands off. Use this first; do not jump straight into a `*-troubleshoot` skill from a free-form complaint. |
 | [`graylog-server-troubleshoot`](.apm/skills/graylog-server-troubleshoot/SKILL.md) | Graylog server | UI inaccessible, OOM, journal pressure, "not processing messages", deflector errors, widget errors, timestamps, OpenSearch nodes info unavailable. |
 | [`opensearch-troubleshoot`](.apm/skills/opensearch-troubleshoot/SKILL.md) | OpenSearch / Elasticsearch | Mapping field-limit explosions, `.opendistro-ism-config` noise, heap past 32 GB, disk-allocator read-only locks. |
 | [`fluentd-troubleshoot`](.apm/skills/fluentd-troubleshoot/SKILL.md) | FluentD | Worker SIGKILL / OOM, high DiskIO, GELF UDP "data too big / 128 chunks", configmap-reload restarts. |

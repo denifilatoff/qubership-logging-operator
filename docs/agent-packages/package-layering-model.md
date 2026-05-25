@@ -45,9 +45,9 @@ Each layer depends only on layers below it. A higher layer never declares depend
 
 - **Layer 0 — cross-cutting.** Universal building blocks. `kubernetes-context`, the L1/L2 methodology document, generic K8s pod-debug patterns, K8s resource heuristics. `troubleshoot-k8s-net` and `troubleshoot-k8s-storage` are separate packages because not every consumer needs them and bundling everything into one Layer 0 package would inflate persistent context.
 
-- **Layer 1 — tech area.** Owns one knowledge area: one symptom catalogue, one sweep, one set of recommendations. Examples: `troubleshoot-graylog`, `troubleshoot-prometheus`. Owned by the team that owns that technology. Depends on `troubleshooting-common` and optionally other Layer 0 packages.
+- **Layer 1 — tech area.** Owns one knowledge area: one symptom catalogue, one diagnostic pass, one set of recommendations. Examples: `troubleshoot-graylog`, `troubleshoot-prometheus`. Owned by the team that owns that technology. Depends on `troubleshooting-common` and optionally other Layer 0 packages.
 
-- **Layer 2 — domain.** Owns triage and routing across the technologies of one domain. Ships an `<domain>-l1-triage` (ticket-driven, no live access) and an `<domain>-l2-triage` (live cluster sweep + signal-table routing). Depends on the Layer 1 packages it routes to, plus `troubleshooting-common`.
+- **Layer 2 — domain.** Owns triage and routing across the technologies of one domain. Ships an `<domain>-l1-triage` (ticket-driven, no live access) and an `<domain>-l2-triage` (live cluster diagnostic pass + signal-table routing). Depends on the Layer 1 packages it routes to, plus `troubleshooting-common`.
 
 - **Layer 3 — umbrella.** A `apm.yml` with dependencies only, no skills or instructions of its own beyond a thin top-level router instruction. Service teams pull umbrellas based on what their service uses.
 
@@ -223,7 +223,7 @@ In parallel with or after Stage 1: `troubleshoot-k8s-net`, `troubleshoot-k8s-sto
 
 Each technology team (Graylog team, Prometheus team, Postgres team) writes its own `troubleshoot-<tech>`. Dependencies: `troubleshooting-common` (mandatory) plus other cross-cutting Layer 0 packages as needed.
 
-These packages can be written independently and in parallel. The only requirement is to follow the contract from Layer 0: symptom catalogue in the agreed format, sweep + recommend, no mutating actions.
+These packages can be written independently and in parallel. The only requirement is to follow the contract from Layer 0: symptom catalogue in the agreed format, diagnostic pass + recommend, no mutating actions.
 
 ### Stage 4 — Domain triage packages (Layer 2)
 

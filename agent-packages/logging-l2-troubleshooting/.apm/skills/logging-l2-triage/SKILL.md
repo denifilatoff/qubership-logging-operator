@@ -1,6 +1,6 @@
 ---
 name: logging-l2-triage
-description: L2 triage for the Qubership logging stack — runs an initial read-safe sweep across the live cluster, identifies the affected knowledge area, and invokes the right `troubleshoot-*` or `investigate-*` skill via the Skill tool to continue diagnosis in the same session. Use whenever an engineer reports a live logging-stack problem (Graylog, OpenSearch, FluentD, FluentBit, log volume, "logs not arriving", "Graylog journal full") — even when the area looks obvious from the description, route through this skill first so the routing decision is grounded in what the cluster actually shows, not just words in a ticket. Also use when an L1 handoff envelope lands with `area: ambiguous` or with a primary area that needs confirmation. Read-only; does not diagnose root causes — the area skill you invoke does that.
+description: L2 triage for the Qubership logging stack — runs an initial read-safe diagnostic pass across the live cluster, identifies the affected knowledge area, and invokes the right `troubleshoot-*` or `investigate-*` skill via the Skill tool to continue diagnosis in the same session. Use whenever an engineer reports a live logging-stack problem (Graylog, OpenSearch, FluentD, FluentBit, log volume, "logs not arriving", "Graylog journal full") — even when the area looks obvious from the description, route through this skill first so the routing decision is grounded in what the cluster actually shows, not just words in a ticket. Also use when an L1 handoff envelope lands with `area: ambiguous` or with a primary area that needs confirmation. Read-only; does not diagnose root causes — the area skill you invoke does that.
 ---
 
 # L2 Triage — logging stack
@@ -23,13 +23,13 @@ Only if discovery genuinely fails (RBAC denial, missing secret) escalate to the 
 
 ## Protocol
 
-Read [references/shared-contract.md](references/shared-contract.md) first. Action tiers, read-before-recommend, recommend-block schema. They apply to triage too: do **not** route blind. If the sweep can't be read, escalate to the engineer rather than guessing.
+Read [references/shared-contract.md](references/shared-contract.md) first. Action tiers, read-before-recommend, recommend-block schema. They apply to triage too: do **not** route blind. If the diagnostic pass can't be read, escalate to the engineer rather than guessing.
 
-You never run `recommend`-tier actions yourself. You also don't run a knowledge-area's heavy diagnostics — that is why you invoke the area skill at the end. Your scope is the cluster-wide initial sweep below, plus matching against the signal table.
+You never run `recommend`-tier actions yourself. You also don't run a knowledge-area's heavy diagnostics — that is why you invoke the area skill at the end. Your scope is the cluster-wide initial diagnostic pass below, plus matching against the signal table.
 
-## Initial read-safe sweep
+## Initial read-safe diagnostic pass
 
-This is the same sweep regardless of what the engineer said. It produces concrete observations that decide where to route. Skip individual steps only if the L1 envelope already supplies the equivalent observation — don't re-collect what's already in evidence.
+This is the same diagnostic pass regardless of what the engineer said. It produces concrete observations that decide where to route. Skip individual steps only if the L1 envelope already supplies the equivalent observation — don't re-collect what's already in evidence.
 
 All commands below assume Kubernetes plus HTTP access to Graylog and OpenSearch.
 
@@ -86,10 +86,10 @@ Match the observations against [references/signal-table.md](references/signal-ta
 
 The output of routing is always a **ranked list of candidates** (length ≥ 1), not a single pick. Build it in this order:
 
-1. Rows from the seed table whose signals fired in the sweep, ranked by `match strength × prior`.
+1. Rows from the seed table whose signals fired in the diagnostic pass, ranked by `match strength × prior`.
 2. Plus any area named by the downstream-error-in-upstream-log principle, even when the row-based probe wasn't run.
 3. If steps 1–2 yield nothing but the symptom matches a class in the fallback-chains table → use that chain verbatim.
-4. If still nothing → don't invent a target. Emit a `recommend` for manual diagnosis with the full sweep attached, and stop.
+4. If still nothing → don't invent a target. Emit a `recommend` for manual diagnosis with the full diagnostic pass attached, and stop.
 
 A list of length 1 is the overdetermined case: confirm-or-recommend, no fallback.
 
@@ -119,12 +119,12 @@ emit a recommend for manual diagnosis with the full audit trail, stop
 
 Rules:
 
-- **Found the cause → stop.** As soon as any area skill produces a recommend backed by evidence of an actual root cause in its zone, the case is done. Do not walk the rest of the list "for completeness". Extra invocations cost a sweep each and risk noise.
+- **Found the cause → stop.** As soon as any area skill produces a recommend backed by evidence of an actual root cause in its zone, the case is done. Do not walk the rest of the list "for completeness". Extra invocations cost a diagnostic pass each and risk noise.
 - **Refute → route per `signal_class`.** Each `hypothesis_refuted` carries a `signal_class`: `clean` advances the existing list; `secondary_backpressure` and `secondary_quoted` may insert new candidates derived from the stack topology and the cited-string map in `signal-table.md`. Treat all three as legitimate advance signals — don't stop early because the next candidate wasn't in the original ranked list.
 - **Step budget: 5 area-skill invocations per session.** Most chains converge in 1–2 hops; the budget is for cases where the symptom is genuinely ambiguous across the stack. After 5 refutes, the case is harder than the catalogue covers — escalate.
 - **Don't shop.** "Try the next skill just in case" is not the contract. Advance only on refute or budget exhaustion.
 
-Advance the chain with `Skill({"skill": "<candidate>"})`. After the call, continue in your own voice, applying that area skill's protocol with the sweep evidence already in your context.
+Advance the chain with `Skill({"skill": "<candidate>"})`. After the call, continue in your own voice, applying that area skill's protocol with the diagnostic pass evidence already in your context.
 
 **Do not end on a "handoff envelope" message.** Emit a YAML envelope only as an internal note to organise what you carry into each area skill — never as the final user-facing output.
 
@@ -141,14 +141,14 @@ triage_l2:
             <verbatim command output or quoted log line, trimmed to the relevant lines>
           prior: high | medium | low
       confidence: high | medium | low
-  sweep:                  # the read-safe snapshot — every command run, its output, abbreviated.
+  diagnostic_pass:                  # the read-safe snapshot — every command run, its output, abbreviated.
     - command: kubectl get pods -n logging
       output: |
         ...
     - command: curl -sk -u .. https://<graylog>/api/system/journal
       output: |
         ...
-  notes:                  # partial sweep, unusual customisation observed, engineer constraints.
+  notes:                  # partial diagnostic pass, unusual customisation observed, engineer constraints.
 ```
 
 ## What this skill does not do
@@ -157,4 +157,4 @@ triage_l2:
 - Execute `recommend` actions.
 - Run `read-heavy` queries (large `_search`, full index listings, full log dumps). Those belong inside a knowledge-area skill where they have declared caps.
 - Render a multi-step plan to the engineer up front. Surface one hop at a time — the cluster's actual responses change the next decision.
-- Route to an area that doesn't have a skill in this package yet. If the sweep clearly points at MongoDB / monitoring / a deployment-time failure, hand back to the engineer with the observation and stop (see signal-table.md "Areas not covered yet").
+- Route to an area that doesn't have a skill in this package yet. If the diagnostic pass clearly points at MongoDB / monitoring / a deployment-time failure, hand back to the engineer with the observation and stop (see signal-table.md "Areas not covered yet").

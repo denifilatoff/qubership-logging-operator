@@ -23,7 +23,7 @@ checks:
   - id: triage-routed-via-graylog-input-drop
     description: >
       Verifies the fast routing path for this case: triage's initial
-      sweep detects the GELF input drop signal on the Graylog side
+      diagnostic pass detects the GELF input drop signal on the Graylog side
       (TooLongFrameException or input-drop / oversized-frame warnings
       in graylog-server logs) and routes directly to
       graylog-server-troubleshoot WITHOUT a fluentbit-troubleshoot hop.
@@ -31,7 +31,7 @@ checks:
       Background: FluentBit cannot detect this cascade from its own
       zone — Graylog drops oversized GELF frames silently, FluentBit
       has no retry / error feedback. The cascade is only observable on
-      the Graylog side. Triage's initial sweep includes a Graylog log
+      the Graylog side. Triage's initial diagnostic pass includes a Graylog log
       grep specifically for this, and the signal-table seed routes the
       match to graylog-server with high prior. Going through FluentBit
       first means the fast-path signal was missed.
@@ -52,7 +52,7 @@ checks:
          the fast routing signal was missed).
 
       4. FAIL if no area-skill call appears at all (triage stopped at
-         the initial sweep without invoking a leaf).
+         the initial diagnostic pass without invoking an expert).
   - id: recommend-emitted
     description: >
       A structured recommend block is the final output, proposing a

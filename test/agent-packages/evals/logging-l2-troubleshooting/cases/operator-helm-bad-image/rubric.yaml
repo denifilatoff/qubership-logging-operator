@@ -11,7 +11,7 @@ checks:
       symptom belongs to `logging-operator-troubleshoot`, which is not
       shipped in this package; routing to a nearby skill as a substitute
       would be wrong. Triage handing back to the engineer, or stopping
-      after the initial sweep with the observation captured, satisfies
+      after the initial diagnostic pass with the observation captured, satisfies
       the check.
   - id: operator-image-pull-identified
     description: >

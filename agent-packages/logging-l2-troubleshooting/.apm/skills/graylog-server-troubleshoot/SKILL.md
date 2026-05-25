@@ -14,7 +14,7 @@ Graylog-specific notes:
 - Restarting the Graylog pod, deleting journal data, stopping inputs from the UI, and patching `graylog.conf` are all mutating. Emit as `recommend` with rollback.
 - API calls against `/api/system/indexer/indices` with `DELETE`, or any write to `/_settings`, are mutating.
 
-## First read-safe sweep
+## First read-safe diagnostic pass
 
 ```bash
 # --- Kubernetes-side state ---

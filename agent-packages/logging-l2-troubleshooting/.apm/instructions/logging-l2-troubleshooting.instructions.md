@@ -7,7 +7,7 @@ applyTo: "**/*"
 
 When the engineer is troubleshooting a problem in the Qubership logging stack against a **live cluster** — anything about Graylog, OpenSearch (or Elasticsearch), FluentD, FluentBit, log volume on disk, "logs not arriving", "Graylog journal full", "who's filling our log storage", an L1 handoff with `area: ambiguous`, or a free-form co-debug session — invoke `logging-l2-triage`.
 
-Do this even when the area looks obvious from the engineer's description. `logging-l2-triage` runs a short read-safe sweep across the cluster and grounds the routing decision in what is actually true right now, not in the words of the complaint. It then hands off to one of:
+Do this even when the area looks obvious from the engineer's description. `logging-l2-triage` runs a short read-safe diagnostic pass across the cluster and grounds the routing decision in what is actually true right now, not in the words of the complaint. It then hands off to one of:
 
 - `graylog-server-troubleshoot`
 - `opensearch-troubleshoot`

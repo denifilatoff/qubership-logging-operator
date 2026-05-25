@@ -17,7 +17,7 @@ Shared contract for every `troubleshoot-*` and `investigate-*` skill in this pac
 
 A `recommend` is a proposed state change. Before emitting it, capture a `read-safe` snapshot of the state the action mutates **plus** the state that proves the action is still needed. The snapshot does two things: lets the operator verify the recommendation is still valid when they read it, and gives a rollback baseline.
 
-The output of each skill's first read-safe sweep is what you turn into `snapshot:` and `evidence:` — capture the actual command output as you go, don't summarise.
+The output of each skill's first read-safe diagnostic pass is what you turn into `snapshot:` and `evidence:` — capture the actual command output as you go, don't summarise.
 
 If the state cannot be read — RBAC denial, pod unreachable, command times out — do **not** recommend blind. Escalate to the engineer with what failed and stop.
 
@@ -51,7 +51,7 @@ To add a new pattern: edit the corresponding `docs/troubleshooting/<area>.md` in
 
 ## Signal classification & refute contract
 
-After the sweep, classify the in-zone signal as one of:
+After the diagnostic pass, classify the in-zone signal as one of:
 
 - **`clean`** — no failure signal in this zone.
 - **`primary`** — signal in this zone, explainable by causes internal to it (misconfig, bug, hard panic, leak). Emit `recommend`, not refute.
@@ -62,7 +62,7 @@ After the sweep, classify the in-zone signal as one of:
 
 Each area skill defines the **decision tree** for its zone in its own SKILL ("Zone signal classification" section). The tree walks the four classes in order CLEAN → QUOTED → BACKPRESSURE → PRIMARY on observable predicates — `primary` is the default fallback when no other class matches.
 
-An area skill never names which skill to call next and never reasons about stack topology. Routing on a refute is triage's job: it owns the topology map and the chain. The leaf reports class + raw observations; triage decides the next hop.
+An area skill never names which skill to call next and never reasons about stack topology. Routing on a refute is triage's job: it owns the topology map and the chain. The expert reports class + raw observations; triage decides the next hop.
 
 Emit the refute in this shape:
 
@@ -70,19 +70,19 @@ Emit the refute in this shape:
 hypothesis_refuted: true
 skill: <name of the area skill emitting this>
 signal_class: clean | secondary_backpressure | secondary_quoted
-sweep_evidence: |
-  <verbatim summary of what the sweep saw>
+diagnostic_pass_evidence: |
+  <verbatim summary of what the diagnostic pass saw>
 cited_external_components: # raw strings from logs / metrics; omit when signal_class=clean
   - <verbatim quote or component name, e.g. "graylog:12201 connection refused">
   - <"disk usage exceeded flood-stage watermark">
-reason: <one sentence on why this class fits the sweep>
+reason: <one sentence on why this class fits the diagnostic pass>
 ```
 
 Rules:
 
-- Refute is not "I'm not sure". `clean` means the sweep checked the things this zone owns and they're healthy. `secondary_*` means the sweep saw signal, but the signal is the shape of a consequence, not a root cause.
-- A partial sweep that couldn't read what it needed escalates to the engineer (read-before-recommend rule), not refutes.
-- Do not invent `cited_external_components`. Only strings the sweep actually observed.
+- Refute is not "I'm not sure". `clean` means the diagnostic pass checked the things this zone owns and they're healthy. `secondary_*` means the diagnostic pass saw signal, but the signal is the shape of a consequence, not a root cause.
+- A partial diagnostic pass that couldn't read what it needed escalates to the engineer (read-before-recommend rule), not refutes.
+- Do not invent `cited_external_components`. Only strings the diagnostic pass actually observed.
 - An area skill never invokes another area skill itself. The only outputs are `recommend` (case closed) or `hypothesis_refuted` (over to triage).
 
 ## What every L2 skill must not do

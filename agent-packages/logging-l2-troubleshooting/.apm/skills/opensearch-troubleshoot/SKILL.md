@@ -15,7 +15,7 @@ OpenSearch-specific notes:
 - `_search` and `_update_by_query` against `*` are **`read-heavy`**. Always cap with `size`, time window, or a concrete index pattern. If you can't, demote to `recommend`.
 - Deleting indices, clearing read-only flags, or toggling cluster settings (`cluster.routing.allocation.*`) are mutating. Never run; emit as `recommend` with rollback.
 
-## First read-safe sweep
+## First read-safe diagnostic pass
 
 ```bash
 # Cluster health and node count. RED status anywhere reframes everything else.

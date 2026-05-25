@@ -9,7 +9,7 @@ description: Diagnose FluentD problems in the Qubership logging stack — worker
 
 Read [references/shared-contract.md](references/shared-contract.md) first — it governs invocation, action tiers, read-before-recommend, the `recommend` block schema, the symptom-catalogue convention, and the refute contract.
 
-## First read-safe sweep
+## First read-safe diagnostic pass
 
 ```bash
 # Workload. FluentD is a DaemonSet in standard mode; in HA mode it may not be present at all.
