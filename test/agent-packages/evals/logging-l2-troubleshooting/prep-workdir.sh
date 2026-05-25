@@ -47,6 +47,28 @@ if [ "$variant" = "with-pkg" ]; then
   ( cd "$workdir" \
     && apm install "$package_dir" --target claude --force --verbose \
        >"$workdir/.apm-install.log" 2>&1 )
+
+  # APM bug workaround: `apm install` from a local path does not dereference
+  # symlinks inside .apm/skills/<name>/references/ when integrating into
+  # .claude/skills/<name>/references/, so those directories end up empty and
+  # the agent reads broken references. Install from a remote (GitHub URL)
+  # works correctly because the git fetch materializes targets before
+  # integration. We work around by copying each symlink target (cp -L) from
+  # the source package into the deployed skill tree.
+  #
+  # TODO: file an APM upstream bug — local-path install should dereference
+  # symlinks the same way remote install does. Until that lands, this loop
+  # stays.
+  src_skills="$package_dir/.apm/skills"
+  dst_skills="$workdir/.claude/skills"
+  if [ -d "$dst_skills" ]; then
+    while IFS= read -r -d '' link; do
+      rel="${link#$src_skills/}"            # <skill>/references/<file>.md
+      dst="$dst_skills/$rel"
+      mkdir -p "$(dirname "$dst")"
+      cp -L "$link" "$dst"
+    done < <(find "$src_skills" -type l -name '*.md' -path '*/references/*' -print0)
+  fi
 fi
 
 echo "$workdir"
