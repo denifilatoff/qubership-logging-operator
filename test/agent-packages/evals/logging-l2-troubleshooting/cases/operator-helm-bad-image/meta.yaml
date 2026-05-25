@@ -1,5 +1,4 @@
-id: F4-helm-bad-image
-cluster_fixture: F4-helm-bad-image
+id: operator-helm-bad-image
 backend: victorialogs
 expected_area: none
 expected_recommend_kind: manual-diagnosis

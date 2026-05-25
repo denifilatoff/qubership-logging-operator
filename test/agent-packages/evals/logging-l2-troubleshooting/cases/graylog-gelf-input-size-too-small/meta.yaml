@@ -1,5 +1,4 @@
-id: F7-gelf-input-size
-cluster_fixture: F7-gelf-input-size
+id: graylog-gelf-input-size-too-small
 backend: graylog
 expected_area: graylog-server-troubleshoot
 expected_recommend_kind: graylog-input-config-change

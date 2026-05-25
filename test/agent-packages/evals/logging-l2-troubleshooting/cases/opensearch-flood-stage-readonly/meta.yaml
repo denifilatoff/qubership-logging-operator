@@ -1,5 +1,4 @@
-id: F3-opensearch-readonly
-cluster_fixture: F3-disk-readonly
+id: opensearch-flood-stage-readonly
 backend: graylog
 expected_area: opensearch-troubleshoot
 expected_recommend_kind: opensearch-cluster-settings-change

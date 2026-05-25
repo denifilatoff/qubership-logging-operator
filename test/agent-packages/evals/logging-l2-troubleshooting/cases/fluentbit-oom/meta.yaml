@@ -1,5 +1,4 @@
-id: F2-fluentbit-oom
-cluster_fixture: F2-fluent-oom
+id: fluentbit-oom
 backend: victorialogs
 expected_area: fluentbit-troubleshoot
 expected_recommend_kind: resource-bump

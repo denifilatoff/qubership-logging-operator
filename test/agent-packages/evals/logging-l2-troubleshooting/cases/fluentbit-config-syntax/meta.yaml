@@ -1,5 +1,4 @@
-id: F1-fluentbit-config-syntax
-cluster_fixture: F1-fluent-config-syntax
+id: fluentbit-config-syntax
 backend: victorialogs
 expected_area: fluentbit-troubleshoot
 expected_recommend_kind: configmap-restore

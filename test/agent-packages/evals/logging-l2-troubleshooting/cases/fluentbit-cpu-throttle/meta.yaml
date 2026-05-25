@@ -1,5 +1,4 @@
-id: F5b-fluentbit-cpu-throttle
-cluster_fixture: F5b-fluentbit-cpu-throttle
+id: fluentbit-cpu-throttle
 backend: graylog
 expected_area: fluentbit-troubleshoot
 expected_recommend_kind: resource-bump
