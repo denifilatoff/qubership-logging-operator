@@ -41,7 +41,7 @@ node both report healthy free space. The smoking gun lives in
   check.
 - rollback: re-`PUT` the captured pre-incident `_cluster/settings`
   snapshot (the cluster fixture snapshots transient settings to
-  `deploy/kind/fixtures/.state/F3-disk-readonly.snapshot.json`).
+  `test/agent-packages/scenarios/.state/opensearch-flood-stage-readonly.snapshot.json`).
 
 **Required snapshot fields attached to the recommend:**
 - `_cluster/settings?flat_settings=true` output showing the lowered

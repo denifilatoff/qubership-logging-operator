@@ -11,7 +11,7 @@ reconcile the ConfigMap back to a healthy state — the broken content
 persists.
 
 The fixture seeds a unique marker line that makes the bad content obvious
-on inspection: a line beginning with `@@@-fixture-F1-broken-syntax-@@@`
+on inspection: a line beginning with `@@@-fixture-broken-syntax-@@@`
 prepended to the largest key in the ConfigMap's `data` map.
 
 **Expected recommend:**
@@ -19,9 +19,9 @@ prepended to the largest key in the ConfigMap's `data` map.
 - target: ConfigMap `logging-fluentbit` in namespace `logging` (and
   the `logging-operator` deployment in the same namespace).
 - change: restore the ConfigMap's affected data key to its pre-edit
-  content (drop the `@@@-fixture-F1-broken-syntax-@@@` line). The
+  content (drop the `@@@-fixture-broken-syntax-@@@` line). The
   cluster fixture keeps a snapshot at
-  `deploy/kind/fixtures/.state/F1-fluent-config-syntax.snapshot.yaml`
+  `test/agent-packages/scenarios/.state/fluentbit-config-syntax.snapshot.yaml`
   that holds the original ConfigMap and is the natural restore source.
   Scaling `logging-operator` back to replicas=1 is a secondary action
   that allows future reconciliation but does not, on its own, fix
