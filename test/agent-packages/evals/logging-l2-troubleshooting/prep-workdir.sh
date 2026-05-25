@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # prep-workdir.sh — prepare one ephemeral workdir for the eval pipeline.
 #
-# Usage: prep-workdir.sh <fixture-id> <variant> <run-id>
+# Usage: prep-workdir.sh <case-slug> <variant> <run-id>
 #   variant: with-pkg | no-pkg
 #
 # with-pkg: runs `apm install <package> --target claude` inside the workdir.
@@ -17,11 +17,11 @@
 set -euo pipefail
 
 if [ $# -ne 3 ]; then
-  echo "usage: $0 <fixture-id> <variant> <run-id>" >&2
+  echo "usage: $0 <case-slug> <variant> <run-id>" >&2
   exit 2
 fi
 
-fixture_id="$1"
+case_slug="$1"
 variant="$2"
 run_id="$3"
 
@@ -35,7 +35,7 @@ repo_root="$(cd "$script_dir/../../../.." && pwd)"
 package_dir="$repo_root/agent-packages/logging-l2-troubleshooting"
 
 cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/qubership-logging-l2-evals"
-workdir="$cache_root/$run_id/$fixture_id/$variant"
+workdir="$cache_root/$run_id/$case_slug/$variant"
 rm -rf "$workdir"
 mkdir -p "$workdir"
 

@@ -77,7 +77,6 @@ for case_slug in "${cases[@]}"; do
       -e "s|{{workdir_no}}|$no|g" \
       "$script_dir/promptfooconfig.yaml" > "$rendered"
 
-  set +e
   ( cd "$script_dir" && \
     npx promptfoo@latest eval \
       --config "$rendered" \
@@ -88,7 +87,6 @@ for case_slug in "${cases[@]}"; do
       --no-cache \
       --output "$results_dir/$case_slug.json" "$results_dir/$case_slug.html" )
   eval_rc=$?
-  set -e
 
   if ! "$scenarios_dir/fixture.sh" revert "$case_slug"; then
     echo "FATAL: revert failed for $case_slug. Cluster dirty. Stopping." >&2
