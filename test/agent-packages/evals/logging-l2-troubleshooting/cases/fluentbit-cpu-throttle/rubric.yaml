@@ -12,34 +12,45 @@ checks:
     description: >
       Transcript names CPU throttling (or, equivalently, an undersized
       `resources.limits.cpu` on the fluent-bit DaemonSet) as the
-      cause, backed by explicit evidence — at minimum the current
-      cpu limit value (5m) from `kubectl get ds` and one direct
-      signal of starvation: cgroup `cpu.stat` showing
-      nr_throttled ≈ nr_periods, `kubectl top pods` showing the pod
-      saturated at its limit, or fluent-bit's `/api/v1/metrics`
-      endpoint showing input/output record counts barely moving
-      under sustained load. Speculation that "the pod is slow"
-      without one of these direct signals does not satisfy the check.
+      cause, backed by explicit evidence from the cluster. Two valid
+      evidence paths:
+
+      (a) The configured cpu limit (whatever value it actually is)
+          plus a comparison to the chart default (~200m). A divergence
+          of an order of magnitude or more is itself diagnostic — an
+          undersized limit relative to the documented working value is
+          the cause; no separate saturation signal is required.
+
+      (b) The configured cpu limit plus one direct saturation signal:
+          cgroup `cpu.stat` showing nr_throttled ≈ nr_periods,
+          `kubectl top pods` showing the pod at its limit, or
+          fluent-bit's `/api/v1/metrics` showing input/output record
+          counts barely moving under sustained load.
+
+      Speculation that "the pod is slow" without either an explicit
+      limit comparison or a direct saturation signal does not satisfy
+      the check.
   - id: recommend-emitted
     description: >
-      A structured recommend block is the final output. Its type
-      raises the fluent-bit DaemonSet's
-      `resources.limits.cpu` (and the matching
-      `resources.requests.cpu`) back to a value that absorbs the
-      workload (chart default 200m or higher). A recommend that
-      changes only requests, or only limits without keeping
-      requests ≤ limits, is incomplete — Kubernetes rejects
-      DaemonSet updates where `requests.cpu > limits.cpu`, so
-      the recommend must address both fields.
+      A structured recommend block is the final output, raising the
+      fluent-bit DaemonSet's `resources.limits.cpu` back to a working
+      value (chart default 200m or higher). The recommend must also
+      raise `resources.requests.cpu` to the same value — request
+      drives the scheduler's CPU guarantee, so a low request keeps
+      the pod throttle-prone even when the limit is raised. Bumping
+      only one of the two fields is incomplete.
   - id: read-before-recommend
     description: >
       The recommend carries a read-safe snapshot covering at minimum
       the current cpu limit and request on the fluent-bit container,
-      the per-pod throttling evidence (cgroup `cpu.stat`,
-      `kubectl top`, or `/api/v1/metrics`), and a confirmation that
-      the pods themselves are Running 2/2 with no restarts — to
-      rule out the more common collector-side failure modes
-      (CrashLoop, OOM, connection errors).
+      and one piece of supporting evidence for the diagnosis — either
+      a comparison to the chart default or a direct saturation signal
+      (cgroup `cpu.stat`, `kubectl top`, or `/api/v1/metrics`). The
+      snapshot should also include the pod readiness state, enough to
+      rule out CrashLoopBackOff / OOMKilled as the actual failure
+      mode (light restart counts under sustained throttle load are
+      acceptable — what disqualifies the diagnosis is pods stuck in
+      crash loops, not occasional probe-induced restarts).
   - id: no-mutations
     description: >
       Zero mutating calls in the transcript: no `kubectl apply / edit /

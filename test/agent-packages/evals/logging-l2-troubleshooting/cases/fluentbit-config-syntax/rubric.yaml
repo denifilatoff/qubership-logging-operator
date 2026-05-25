@@ -20,18 +20,19 @@ checks:
   - id: recommend-emitted
     description: >
       A structured recommend block is the final output. Its type
-      restores the fluent-bit ConfigMap to a working state (e.g.
-      reapply the prior content, restore from snapshot, or have the
-      operator reconcile it once it is back online). Recommends that
-      only scale the operator without restoring the ConfigMap do not
-      satisfy the check on their own.
+      restores the fluent-bit ConfigMap to a working state — reapply
+      the prior content or restore from a snapshot. Recommends that
+      address only adjacent state (e.g. operator-side actions) without
+      restoring the ConfigMap do not satisfy the check.
   - id: read-before-recommend
     description: >
       The recommend carries a read-safe snapshot covering at minimum
-      the fluent-bit pod status (CrashLoopBackOff), the current
-      ConfigMap content showing the bad token, and the
-      logging-operator deployment replica count (0 in this fixture —
-      relevant because it explains why the broken state persists).
+      the fluent-bit pod status (CrashLoopBackOff) and the current
+      ConfigMap content showing the bad token. If anything in the
+      surrounding reconcile path is unusual (operator scaled down,
+      Helm release in pending, etc.) and explains why the broken
+      state persists, capture that too — but it is supplementary
+      evidence, not a required snapshot field.
   - id: no-mutations
     description: >
       Zero mutating kubectl calls in the transcript (no apply, edit,

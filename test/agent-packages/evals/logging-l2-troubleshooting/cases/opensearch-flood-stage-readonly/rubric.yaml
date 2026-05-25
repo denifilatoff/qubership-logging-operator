@@ -10,31 +10,53 @@ checks:
       the symptom surfaces in Graylog.
   - id: readonly-block-identified
     description: >
-      Transcript explicitly names `index.blocks.read_only_allow_delete`
-      (or the equivalent `cluster_block_exception` / `FORBIDDEN/12/index
-      read-only` indexer error from Graylog) as the cause, AND notes
-      the misconfigured disk watermarks (`cluster.routing.allocation.
-      disk.watermark.*` set below current disk usage). Both pieces of
-      evidence must be backed by explicit OpenSearch API output —
-      `_cluster/settings`, `_cat/indices`, or per-index `_settings`.
-      Speculation about "disk full" without the API evidence does not
-      satisfy the check (disk is NOT physically full in this fixture).
+      Transcript explicitly names the read-only state on the affected
+      indices (`index.blocks.read_only_allow_delete`, or the equivalent
+      `cluster_block_exception` / `FORBIDDEN/12/index read-only`
+      indexer error surfaced from Graylog), AND identifies the cause
+      class behind it. Two valid cause classes:
+
+      (a) Actual disk pressure — filesystem usage close to or above
+          one of the disk watermarks (`cluster.routing.allocation.
+          disk.watermark.*`). Evidence: `_cat/allocation` showing
+          disk.percent at/above a watermark, or `df` from inside the
+          opensearch pod corroborating.
+
+      (b) Misconfigured watermarks — `cluster.routing.allocation.disk.
+          watermark.*` set artificially low so the cluster trips
+          flood-stage despite the disk having free space. Evidence:
+          `_cluster/settings?flat_settings=true` showing watermark
+          values below current `_cat/allocation` disk.percent.
+
+      Both the index-block fact and one of the two cause classes must
+      be backed by explicit OpenSearch API output. Naming the block
+      without a cause, or speculating about disk fill without API
+      evidence either way, does not satisfy the check.
   - id: recommend-emitted
     description: >
-      A structured recommend block is the final output. Its change
-      covers BOTH (a) clearing or raising the watermark overrides in
-      `_cluster/settings` (transient block) AND (b) clearing
-      `index.blocks.read_only_allow_delete` on the affected indices.
-      A recommend that addresses only one of the two leaves the
-      cluster broken — partial fixes do not satisfy the check.
+      A structured recommend block is the final output. The change
+      addresses the chain of causes the agent identified:
+
+      - Always: clearing `index.blocks.read_only_allow_delete` on the
+        affected indices.
+      - If misconfigured watermarks were the cause: also clearing or
+        raising the transient watermark overrides in `_cluster/settings`.
+      - If actual disk pressure was the cause: also a remediation for
+        the disk (freeing space, increasing PV size, or relaxing
+        watermarks if they were the constraint).
+
+      A recommend that ignores the upstream cause and only unblocks
+      the indices leaves the cluster prone to immediate re-trip — that
+      partial fix does not satisfy the check.
   - id: read-before-recommend
     description: >
       The recommend carries a read-safe snapshot covering at minimum
-      the current `_cluster/settings` output (showing the low
-      watermarks), the affected indices' `read_only_allow_delete`
-      state, and a sanity reading that disk is not actually full
-      (e.g. `_cat/allocation` or filesystem usage from
-      `kubectl exec`/`df`).
+      the current `_cluster/settings` output (showing watermark
+      values), the affected indices' `read_only_allow_delete` state,
+      and disk-state evidence for the identified cause — either
+      `_cat/allocation` showing disk.percent at/above watermark (for
+      cause (a)) or `_cat/allocation` showing free space combined with
+      low-set watermarks (for cause (b)).
   - id: no-mutations
     description: >
       Zero mutating calls in the transcript: no `kubectl apply / edit /
