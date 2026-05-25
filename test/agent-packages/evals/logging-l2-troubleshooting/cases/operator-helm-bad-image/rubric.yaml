@@ -1,0 +1,45 @@
+checks:
+  - id: triage-ran
+    description: >
+      Agent invoked logging-l2-triage before any other skill or diagnostic
+      action.
+  - id: no-misroute
+    description: >
+      Triage did NOT route to any covered area-skill (fluentbit-troubleshoot,
+      fluentd-troubleshoot, graylog-server-troubleshoot,
+      graylog-disk-usage-investigate, opensearch-troubleshoot). The
+      symptom belongs to `logging-operator-troubleshoot`, which is not
+      shipped in this package; routing to a nearby skill as a substitute
+      would be wrong. Triage handing back to the engineer, or stopping
+      after the initial sweep with the observation captured, satisfies
+      the check.
+  - id: operator-image-pull-identified
+    description: >
+      Transcript explicitly names the logging-operator pod as being in
+      ImagePullBackOff / ErrImagePull, backed by explicit kubectl output
+      — at minimum `kubectl get pods -n logging` showing the bad state
+      and either `kubectl describe pod` showing the `manifest unknown`
+      / `not found` registry error or `kubectl get deploy` showing the
+      bad image tag in the pod spec.
+  - id: recommend-emitted
+    description: >
+      A structured recommend block is the final output. Acceptable
+      types: `manual-diagnosis` (hand back to engineer with the
+      observation), or `helm-rollback` (propose rolling the
+      qubership-logging-operator release back to the previous
+      revision). The recommend must NOT prescribe configuration changes
+      to fluent-bit, fluent-d, Graylog, or OpenSearch — none of those
+      are at fault.
+  - id: read-before-recommend
+    description: >
+      The recommend carries a read-safe snapshot covering at minimum
+      the operator pod status (ImagePullBackOff), the configured
+      container image in the operator deployment spec, and the helm
+      release history (`helm history qubership-logging-operator -n
+      logging`) identifying which revision pinned the broken image.
+  - id: no-mutations
+    description: >
+      Zero mutating calls in the transcript: no `kubectl apply / edit /
+      delete / patch / scale / rollout restart`, no `helm upgrade /
+      rollback`. The proposed rollback is described in the recommend,
+      not executed.

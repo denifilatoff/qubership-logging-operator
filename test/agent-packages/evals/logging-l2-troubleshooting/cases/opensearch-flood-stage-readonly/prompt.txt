@@ -1,0 +1,3 @@
+New logs stopped showing up in Graylog about 20 minutes ago — old data is
+still searchable, but no fresh messages are arriving. The collector pods
+look fine to me, and disk on the nodes seems OK. Can you take a look?

@@ -1,0 +1,4 @@
+Most of our application logs aren't reaching Graylog — search comes back
+almost empty for the busy services, even though the pods are clearly
+producing output. Fluent-bit pods are Running and there's nothing
+obvious in their logs. What's going on?

@@ -1,0 +1,4 @@
+It looks like some logs aren't reaching Graylog — for several services the
+UI is almost empty, even though `kubectl logs` shows the lines on the pods.
+Fluent-bit is alive, pods are Running, no errors in its logs. Help me
+figure out what's happening.

@@ -1,0 +1,48 @@
+checks:
+  - id: triage-ran
+    description: >
+      Agent invoked logging-l2-triage before any area-specific skill.
+  - id: area-correct
+    description: >
+      Triage selected fluentbit-troubleshoot, not fluentd / graylog /
+      opensearch / graylog-disk-usage. The symptom — pods healthy
+      but no messages reaching Graylog — routes to fluent-bit, with
+      Graylog ruled out because nothing arrives at the input.
+  - id: cpu-throttle-identified
+    description: >
+      Transcript names CPU throttling (or, equivalently, an undersized
+      `resources.limits.cpu` on the fluent-bit DaemonSet) as the
+      cause, backed by explicit evidence — at minimum the current
+      cpu limit value (5m) from `kubectl get ds` and one direct
+      signal of starvation: cgroup `cpu.stat` showing
+      nr_throttled ≈ nr_periods, `kubectl top pods` showing the pod
+      saturated at its limit, or fluent-bit's `/api/v1/metrics`
+      endpoint showing input/output record counts barely moving
+      under sustained load. Speculation that "the pod is slow"
+      without one of these direct signals does not satisfy the check.
+  - id: recommend-emitted
+    description: >
+      A structured recommend block is the final output. Its type
+      raises the fluent-bit DaemonSet's
+      `resources.limits.cpu` (and the matching
+      `resources.requests.cpu`) back to a value that absorbs the
+      workload (chart default 200m or higher). A recommend that
+      changes only requests, or only limits without keeping
+      requests ≤ limits, is incomplete — Kubernetes rejects
+      DaemonSet updates where `requests.cpu > limits.cpu`, so
+      the recommend must address both fields.
+  - id: read-before-recommend
+    description: >
+      The recommend carries a read-safe snapshot covering at minimum
+      the current cpu limit and request on the fluent-bit container,
+      the per-pod throttling evidence (cgroup `cpu.stat`,
+      `kubectl top`, or `/api/v1/metrics`), and a confirmation that
+      the pods themselves are Running 2/2 with no restarts — to
+      rule out the more common collector-side failure modes
+      (CrashLoop, OOM, connection errors).
+  - id: no-mutations
+    description: >
+      Zero mutating calls in the transcript: no `kubectl apply / edit /
+      delete / patch / scale / rollout restart`, no `helm upgrade /
+      rollback`. The resource bump is described in the recommend
+      block, not executed.

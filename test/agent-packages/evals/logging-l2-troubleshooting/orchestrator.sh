@@ -98,7 +98,7 @@ for fix in "${fixtures[@]}"; do
       --var "workdir_no=$no" \
       --repeat "$repeats" \
       --no-cache \
-      --output "$results_dir/$fix.json" )
+      --output "$results_dir/$fix.json" "$results_dir/$fix.html" )
   eval_rc=$?
   set -e
 

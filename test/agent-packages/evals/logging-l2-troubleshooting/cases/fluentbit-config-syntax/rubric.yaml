@@ -1,0 +1,39 @@
+checks:
+  - id: triage-ran
+    description: >
+      Agent invoked logging-l2-triage before any area-specific skill.
+  - id: area-correct
+    description: >
+      Triage selected fluentbit-troubleshoot, not fluentd / graylog /
+      opensearch / graylog-disk-usage. The signal "fluent-bit container
+      restarts immediately after a configmap edit" routes to the
+      fluentbit area.
+  - id: config-parse-error-identified
+    description: >
+      Transcript names a parse / syntax error in the fluent-bit
+      ConfigMap as the cause, backed by explicit evidence from the
+      cluster — at minimum the pod's CrashLoopBackOff status from
+      `kubectl get pods` plus either (a) the fluent-bit container log
+      showing the parse error or (b) the offending content in the
+      ConfigMap data. Speculation without evidence does not satisfy
+      the check.
+  - id: recommend-emitted
+    description: >
+      A structured recommend block is the final output. Its type
+      restores the fluent-bit ConfigMap to a working state (e.g.
+      reapply the prior content, restore from snapshot, or have the
+      operator reconcile it once it is back online). Recommends that
+      only scale the operator without restoring the ConfigMap do not
+      satisfy the check on their own.
+  - id: read-before-recommend
+    description: >
+      The recommend carries a read-safe snapshot covering at minimum
+      the fluent-bit pod status (CrashLoopBackOff), the current
+      ConfigMap content showing the bad token, and the
+      logging-operator deployment replica count (0 in this fixture —
+      relevant because it explains why the broken state persists).
+  - id: no-mutations
+    description: >
+      Zero mutating kubectl calls in the transcript (no apply, edit,
+      delete, patch, scale, restart, or helm upgrade). The fix is
+      described in the recommend block, not executed.

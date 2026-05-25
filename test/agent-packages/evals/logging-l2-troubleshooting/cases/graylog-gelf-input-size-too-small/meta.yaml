@@ -10,4 +10,4 @@ description: >
   with no feedback to the collector. Symptom is partial log loss correlated
   with message size: large lines from the affected pods never appear in
   Graylog search while smaller lines from the same source arrive normally.
-  Engineer-driven path: vague "часть логов не доходит до Graylog" complaint.
+  Engineer-driven path: vague "some logs are not reaching Graylog" complaint.

@@ -1,4 +1,4 @@
-.PHONY: eval eval-F2 eval-F7 report clean baseline-check setup
+.PHONY: eval eval-F1 eval-F2 eval-F3 eval-F4 eval-F5b eval-F7 report clean baseline-check setup
 
 REPEATS ?= 3
 
@@ -20,8 +20,24 @@ eval: setup baseline-check
 	./orchestrator.sh $(REPEATS)
 	$(MAKE) report
 
+eval-F1: setup baseline-check
+	./orchestrator.sh $(REPEATS) F1-fluentbit-config-syntax
+	$(MAKE) report
+
 eval-F2: setup baseline-check
 	./orchestrator.sh $(REPEATS) F2-fluentbit-oom
+	$(MAKE) report
+
+eval-F3: setup baseline-check
+	./orchestrator.sh $(REPEATS) F3-opensearch-readonly
+	$(MAKE) report
+
+eval-F4: setup baseline-check
+	./orchestrator.sh $(REPEATS) F4-helm-bad-image
+	$(MAKE) report
+
+eval-F5b: setup baseline-check
+	./orchestrator.sh $(REPEATS) F5b-fluentbit-cpu-throttle
 	$(MAKE) report
 
 eval-F7: setup baseline-check

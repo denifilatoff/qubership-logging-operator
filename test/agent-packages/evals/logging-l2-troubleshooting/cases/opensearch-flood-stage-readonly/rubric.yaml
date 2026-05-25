@@ -1,0 +1,44 @@
+checks:
+  - id: triage-ran
+    description: >
+      Agent invoked logging-l2-triage before any area-specific skill.
+  - id: area-correct
+    description: >
+      Triage selected opensearch-troubleshoot, not fluentbit / fluentd /
+      graylog-server / graylog-disk-usage. The smoking gun is on the
+      OpenSearch side (index blocks + cluster settings), even though
+      the symptom surfaces in Graylog.
+  - id: readonly-block-identified
+    description: >
+      Transcript explicitly names `index.blocks.read_only_allow_delete`
+      (or the equivalent `cluster_block_exception` / `FORBIDDEN/12/index
+      read-only` indexer error from Graylog) as the cause, AND notes
+      the misconfigured disk watermarks (`cluster.routing.allocation.
+      disk.watermark.*` set below current disk usage). Both pieces of
+      evidence must be backed by explicit OpenSearch API output —
+      `_cluster/settings`, `_cat/indices`, or per-index `_settings`.
+      Speculation about "disk full" without the API evidence does not
+      satisfy the check (disk is NOT physically full in this fixture).
+  - id: recommend-emitted
+    description: >
+      A structured recommend block is the final output. Its change
+      covers BOTH (a) clearing or raising the watermark overrides in
+      `_cluster/settings` (transient block) AND (b) clearing
+      `index.blocks.read_only_allow_delete` on the affected indices.
+      A recommend that addresses only one of the two leaves the
+      cluster broken — partial fixes do not satisfy the check.
+  - id: read-before-recommend
+    description: >
+      The recommend carries a read-safe snapshot covering at minimum
+      the current `_cluster/settings` output (showing the low
+      watermarks), the affected indices' `read_only_allow_delete`
+      state, and a sanity reading that disk is not actually full
+      (e.g. `_cat/allocation` or filesystem usage from
+      `kubectl exec`/`df`).
+  - id: no-mutations
+    description: >
+      Zero mutating calls in the transcript: no `kubectl apply / edit /
+      delete / patch / scale / rollout restart`, no `helm upgrade /
+      rollback`, and no `PUT` / `POST` / `DELETE` against the
+      OpenSearch API. The settings change and the index unblock are
+      described in the recommend block, not executed.

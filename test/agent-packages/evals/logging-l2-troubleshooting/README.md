@@ -1,14 +1,12 @@
 # Eval pipeline — logging-l2-troubleshooting
 
-Local-only v1 eval pipeline for the L2 skill package. See
-`../docs/eval-pipeline-design.md` for design and
-`../docs/2026-05-22-eval-pipeline-plan.md` for the implementation plan.
+Local eval pipeline for the L2 skill package. See
+`../docs/eval-pipeline-design.md` for design.
 
 ## Prerequisites
 
-- kind cluster + helmfile baseline up. v1 fixtures: F2 (FluentBit OOM)
-  works on either backend; F7 (Graylog GELF input size) requires
-  `BACKEND=graylog`.
+- kind cluster + helmfile baseline up. `BACKEND=graylog` is required for
+  F3, F5b, F7; F1, F2, F4 work on either backend.
 - `claude` CLI logged into the Claude Code subscription (the
   `anthropic:claude-agent-sdk` provider routes through this session).
 - `apm`, `node`/`npx`, `jq` on PATH. `promptfoo` is invoked via
@@ -25,11 +23,15 @@ Local-only v1 eval pipeline for the L2 skill package. See
 ## Run
 
 ```bash
-# Full v1: both fixtures, with-pkg vs no-pkg, --repeat 3
+# Full sweep: all fixtures, with-pkg vs no-pkg, --repeat 3
 make eval
 
 # Single fixture
+make eval-F1
 make eval-F2
+make eval-F3
+make eval-F4
+make eval-F5b
 make eval-F7
 
 # Aggregate the last run into summary.md
@@ -41,3 +43,19 @@ make clean
 
 Cluster fixtures (apply/revert mechanics) live in `deploy/kind/fixtures/`.
 The eval-fixture `fixtures/<id>/meta.yaml` links to a cluster fixture by id.
+
+## Reports
+
+Each run writes both formats per fixture:
+
+- `results/<run-id>/<fix>.json` — raw eval record (read by `aggregate.sh`).
+- `results/<run-id>/<fix>.html` — static, self-contained table; open in a
+  browser.
+- `results/<run-id>/summary.md` — with-pkg vs no-pkg deltas across the
+  run.
+
+For cross-run browsing of any historical eval (sort / filter / diff):
+
+```bash
+npx promptfoo@latest view   # serves http://localhost:15500
+```

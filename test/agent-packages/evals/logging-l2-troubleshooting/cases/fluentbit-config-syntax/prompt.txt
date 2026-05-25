@@ -1,0 +1,4 @@
+FluentBit on the dev cluster is in some kind of restart loop — pods keep
+flapping. Someone on the team was poking at logging configs earlier, not
+sure exactly what. Logs from the cluster have basically stopped. Help me
+figure out what's going on.
