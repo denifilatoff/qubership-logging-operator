@@ -360,3 +360,30 @@ proposed_fix: |
   upgrades that introduce Streams with custom indices, stop all Graylog
   Inputs first.
 ```
+
+## Graylog GELF input drops oversized frames
+
+```yaml
+id: graylog-gelf-input-frame-size
+match:
+  log_grep:
+    target: graylog
+    pattern: 'TooLongFrameException|HTTP body exceeds maximum allowed size|frame too large|gelf.*frame.*(?:too|exceeds)'
+  api_check:
+    path: /api/system/inputs
+    expects: 'GELF input has max_message_size below the size FluentBit/FluentD frames currently send (default ~2MB-12MB depending on collector config)'
+evidence_template: |
+  Quote the netty/jetty exception line from `kubectl logs <graylog-pod>
+  --tail=500 | grep -iE 'TooLongFrame|max_message_size'`, plus the input's
+  current `max_message_size` from `GET /api/system/inputs` (look at the
+  GELF input's `attributes.max_message_size`).
+proposed_fix: |
+  Raise `max_message_size` on the GELF input that's dropping frames.
+  Current chart default is 2097152 (~2MB); set to 12582912 (~12MB) to
+  match FluentBit's default chunk size, or higher if the collector
+  config legitimately produces larger frames. Apply via
+  `PUT /api/system/inputs/<input-id>` or by editing the input's
+  configuration in Graylog UI. Do not edit Graylog directly via API in
+  production — use the LoggingService CR's input section so the change
+  is reconciled.
+```

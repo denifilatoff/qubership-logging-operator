@@ -21,7 +21,7 @@ checks:
       Verifies that fluentbit-troubleshoot, when invoked for this
       internal-memory-misconfig case, emits a `findings:` array
       containing a `symptom_id` corresponding to the OOM symptom from
-      `references/symptoms.md` (e.g. `fluentbit-oomkilled-tight-limit`),
+      `references/symptoms.md` (specifically `fluentbit-oomkilled-tight-limit`),
       plus a `recommend` block proposing a memory-limit increase.
       The expert must NOT return empty findings (that would route the
       chain downstream incorrectly per routing-policy rule 1).
@@ -40,9 +40,7 @@ checks:
       3. In those messages, search for a YAML or fenced code block
          containing:
            - the literal line `findings:` followed by at least one
-             list entry with `symptom_id:` set to an OOM-related id
-             (any id whose YAML record's `match` includes
-             `pod_state: OOMKilled` or whose name contains `oom`),
+             list entry with `symptom_id: fluentbit-oomkilled-tight-limit`,
            - AND a `recommend:` block with `what:` mentioning the
              memory limit on fluentbit.
 

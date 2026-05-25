@@ -73,3 +73,27 @@ proposed_fix: |
   flagged in the parser error) and let the reloader pick up the corrected
   config on its next poll.
 ```
+
+## FluentBit pod OOMKilled on a tight memory limit
+
+```yaml
+id: fluentbit-oomkilled-tight-limit
+match:
+  k8s_state:
+    pod_state: OOMKilled
+  config_check:
+    configmap: logging-fluentbit
+    expects: 'memory limit ≤ 128Mi for the forwarder DaemonSet, ≤ 512Mi for the aggregator StatefulSet'
+evidence_template: |
+  Quote the OOMKilled state from `kubectl describe pod <fluentbit-pod>`
+  (`Last State: Terminated; Reason: OOMKilled`), the configured memory
+  limit from `kubectl get pod <pod> -o jsonpath='{.spec.containers[*].resources}'`,
+  and the recent restart count.
+proposed_fix: |
+  Raise `fluentbit.resources.limits.memory` to the next tier (256Mi for
+  forwarder DaemonSet pods; 1Gi for aggregator StatefulSet pods). If the
+  workload is bursty (large fan-in, high cardinality), bump CPU limits
+  in the same change to avoid trading memory pressure for CPU throttle.
+  Do not edit the pod spec directly — the operator reconciles it back.
+  Patch the operator's chart values or LoggingService CR.
+```

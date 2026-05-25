@@ -21,8 +21,7 @@ checks:
       in graylog-server logs, or the input's current
       `max_message_size` value from `GET /api/system/inputs`). The
       graylog-server-troubleshoot expert must emit a `findings:` array
-      with a `symptom_id` from the graylog catalogue covering this
-      ingest failure mode (e.g. `graylog-unable-to-read-messages`).
+      containing `symptom_id: graylog-gelf-input-frame-size`.
       Speculation without evidence, or empty findings, does not
       satisfy the check.
   - id: triage-routed-via-graylog-input-drop
