@@ -1,4 +1,16 @@
-.PHONY: eval eval-F1 eval-F2 eval-F3 eval-F4 eval-F5b eval-F7 report clean baseline-check setup
+SCENARIOS_DIR := ../../scenarios
+
+CASES := \
+  fluentbit-config-syntax \
+  fluentbit-oom \
+  opensearch-flood-stage-readonly \
+  operator-helm-bad-image \
+  fluentbit-cpu-throttle \
+  graylog-gelf-input-size-too-small
+
+EVAL_TARGETS := $(addprefix eval-,$(CASES))
+
+.PHONY: eval $(EVAL_TARGETS) report clean baseline-check setup
 
 REPEATS ?= 3
 
@@ -9,10 +21,10 @@ setup:
 	fi
 
 baseline-check:
-	@status="$$(../../../deploy/kind/fixtures/fixture.sh status)"; \
+	@status="$$($(SCENARIOS_DIR)/fixture.sh status)"; \
 	if [ "$$status" != "no fixtures active" ]; then \
 	  echo "baseline not clean: $$status"; \
-	  echo "revert active fixture first."; \
+	  echo "revert active scenario first."; \
 	  exit 1; \
 	fi
 
@@ -20,28 +32,8 @@ eval: setup baseline-check
 	./orchestrator.sh $(REPEATS)
 	$(MAKE) report
 
-eval-F1: setup baseline-check
-	./orchestrator.sh $(REPEATS) F1-fluentbit-config-syntax
-	$(MAKE) report
-
-eval-F2: setup baseline-check
-	./orchestrator.sh $(REPEATS) F2-fluentbit-oom
-	$(MAKE) report
-
-eval-F3: setup baseline-check
-	./orchestrator.sh $(REPEATS) F3-opensearch-readonly
-	$(MAKE) report
-
-eval-F4: setup baseline-check
-	./orchestrator.sh $(REPEATS) F4-helm-bad-image
-	$(MAKE) report
-
-eval-F5b: setup baseline-check
-	./orchestrator.sh $(REPEATS) F5b-fluentbit-cpu-throttle
-	$(MAKE) report
-
-eval-F7: setup baseline-check
-	./orchestrator.sh $(REPEATS) F7-gelf-input-size
+$(EVAL_TARGETS): eval-%: setup baseline-check
+	./orchestrator.sh $(REPEATS) $*
 	$(MAKE) report
 
 report:

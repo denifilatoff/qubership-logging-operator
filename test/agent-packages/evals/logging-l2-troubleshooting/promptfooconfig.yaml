@@ -1,7 +1,7 @@
-description: L2 troubleshooting skill eval — fixture passed as CLI var.
+description: L2 troubleshooting skill eval — case passed as CLI var.
 
 prompts:
-  - file://{{fixture_dir}}/prompt.txt
+  - file://{{case_dir}}/prompt.txt
 
 # Both runtime providers are claude-agent-sdk on haiku; they differ only
 # in cwd and label. Inlined here (rather than via file://providers/agent.yaml)
@@ -28,11 +28,11 @@ providers:
       allow_all_tools: true
 
 tests:
-  - description: "{{fixture}}"
+  - description: "{{case}}"
     vars:
-      fixture_dir: "fixtures/{{fixture}}"
-      ground_truth: file://fixtures/{{fixture}}/ground_truth.md
-      rubric_yaml: file://fixtures/{{fixture}}/rubric.yaml
+      case_dir: "cases/{{case}}"
+      ground_truth: file://cases/{{case}}/ground_truth.md
+      rubric_yaml: file://cases/{{case}}/rubric.yaml
     assert:
       # llm-rubric's default rubric var is `{{ output }}` and it ONLY carries
       # the agent's final assistant text — not tool calls. Most rubric checks

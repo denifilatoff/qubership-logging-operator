@@ -31,7 +31,8 @@ case "$variant" in
 esac
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
-package_dir="$(cd "$script_dir/.." && pwd)"  # logging-l2-troubleshooting/
+repo_root="$(cd "$script_dir/../../../.." && pwd)"
+package_dir="$repo_root/agent-packages/logging-l2-troubleshooting"
 
 cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/qubership-logging-l2-evals"
 workdir="$cache_root/$run_id/$fixture_id/$variant"
@@ -39,10 +40,10 @@ rm -rf "$workdir"
 mkdir -p "$workdir"
 
 if [ "$variant" = "with-pkg" ]; then
-  # --force: the source package contains evals/node_modules with binary deps,
-  # which `apm install` flags as "critical hidden characters". The skills under
-  # .apm/skills/ are the actual deliverable and are vetted; we override the
-  # heuristic for this eval-only install path.
+  # Install from the local package source via apm. After the layout fix,
+  # the package directory holds only .apm/ + apm.yml + README.md so audit
+  # should not flag it; --force is kept as a belt-and-braces hedge while
+  # the local pipeline matures.
   ( cd "$workdir" \
     && apm install "$package_dir" --target claude --force --verbose \
        >"$workdir/.apm-install.log" 2>&1 )
