@@ -7,7 +7,7 @@ description: Diagnose FluentBit problems in the Qubership logging stack — conn
 
 ## Protocol
 
-Read [references/shared-contract.md](references/shared-contract.md) first — it governs invocation, action tiers, read-before-recommend, the `recommend` block schema, the symptom-catalogue convention, and the refute contract.
+Read [references/shared-contract.md](references/shared-contract.md) first — it governs invocation, action tiers, read-before-recommend, the `recommend` block schema, the expert output schema, and the anti-fabrication rule.
 
 ## First read-safe diagnostic pass
 
