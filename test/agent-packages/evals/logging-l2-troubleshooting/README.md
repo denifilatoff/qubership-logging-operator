@@ -1,61 +1,60 @@
 # Eval pipeline — logging-l2-troubleshooting
 
 Local eval pipeline for the L2 skill package. See
-`../docs/eval-pipeline-design.md` for design.
+`docs/agent-packages/eval-pipeline-design.md` for design.
 
 ## Prerequisites
 
-- kind cluster + helmfile baseline up. `BACKEND=graylog` is required for
-  F3, F5b, F7; F1, F2, F4 work on either backend.
+- kind cluster + helmfile baseline up. `BACKEND=graylog` is required
+  for `opensearch-flood-stage-readonly`, `fluentbit-cpu-throttle`,
+  `graylog-gelf-input-size-too-small`; the others work on either
+  backend.
 - `claude` CLI logged into the Claude Code subscription (the
   `anthropic:claude-agent-sdk` provider routes through this session).
-- `apm`, `node`/`npx`, `jq` on PATH. `promptfoo` is invoked via
+- `apm`, `node` / `npx`, `jq` on PATH. `promptfoo` is invoked via
   `npx promptfoo@latest`.
 - One-time setup in this directory:
 
   ```bash
-  cd agent-packages/logging-l2-troubleshooting/evals
-  npm install --no-save @anthropic-ai/claude-agent-sdk
+  cd test/agent-packages/evals/logging-l2-troubleshooting
+  make setup
   ```
 
-  The promptfoo provider resolves the SDK from the local `node_modules/`.
+  Installs `@anthropic-ai/claude-agent-sdk` into a local `node_modules/`
+  (gitignored).
 
 ## Run
 
 ```bash
-# Full sweep: all fixtures, with-pkg vs no-pkg, --repeat 3
+# Full sweep: all cases, with-pkg vs no-pkg, --repeat 3
 make eval
 
-# Single fixture
-make eval-F1
-make eval-F2
-make eval-F3
-make eval-F4
-make eval-F5b
-make eval-F7
-
-# Aggregate the last run into summary.md
-make report
-
-# Wipe ephemeral workdirs and result trees
-make clean
+# Single case
+make eval-fluentbit-oom
+make eval-fluentbit-config-syntax
+make eval-opensearch-flood-stage-readonly
+# ... one target per case ...
 ```
 
-Cluster fixtures (apply/revert mechanics) live in `deploy/kind/fixtures/`.
-The eval-fixture `fixtures/<id>/meta.yaml` links to a cluster fixture by id.
+`make eval` and `make eval-<case>` both run a baseline-clean check
+before starting and abort if a scenario is already active.
 
-## Reports
+## Layout
 
-Each run writes both formats per fixture:
+- `promptfooconfig.yaml` — promptfoo eval config (templated).
+- `Makefile` — entry points: `eval`, `eval-<case>`, `report`, `clean`.
+- `orchestrator.sh` — serial loop over cases: apply scenario → run
+  promptfoo → revert.
+- `prep-workdir.sh` — prepares a workdir per (case, variant).
+- `aggregate.sh` — collapses the last run's JSON outputs into
+  `results/<run-id>/summary.md`.
+- `cases/<case-slug>/` — one directory per evaluation case:
+  - `prompt.txt` — what the agent is asked.
+  - `ground_truth.md` — expected diagnosis + recommendation.
+  - `rubric.yaml` — checks the judge evaluates.
+  - `meta.yaml` — case metadata (backend, expected area, etc.).
+- `providers/` — promptfoo provider definitions.
+- `judge-prompt.txt` — system prompt for the LLM judge.
+- `results/` — per-run output (gitignored).
 
-- `results/<run-id>/<fix>.json` — raw eval record (read by `aggregate.sh`).
-- `results/<run-id>/<fix>.html` — static, self-contained table; open in a
-  browser.
-- `results/<run-id>/summary.md` — with-pkg vs no-pkg deltas across the
-  run.
-
-For cross-run browsing of any historical eval (sort / filter / diff):
-
-```bash
-npx promptfoo@latest view   # serves http://localhost:15500
-```
+The case slug equals the scenario slug — no mapping needed.
