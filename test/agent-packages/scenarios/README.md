@@ -1,49 +1,58 @@
-# Fixtures
+# Scenarios
 
-Each subdirectory is a reproducible failure scenario for the local kind
-stack.
+Each subdirectory reproduces one failure on a running logging stack.
 
-| Fixture | Case |
-|---|---|
-| F1-fluent-config-syntax    | Broken ConfigMap → FluentBit CrashLoopBackOff |
-| F2-fluent-oom              | Memory limit too low → FluentBit OOMKilled    |
-| F3-disk-readonly           | OpenSearch flood-stage → indices read-only     |
-| F4-helm-bad-image          | Bad image tag → operator ImagePullBackOff      |
-| F5b-fluentbit-cpu-throttle | CPU limit too low → throughput collapse, messages lost |
-| F7-gelf-input-size         | Graylog GELF input `max_message_size` too small → big logs dropped |
+| Scenario                                | Component   | Backend       | What breaks                                                       |
+|-----------------------------------------|-------------|---------------|-------------------------------------------------------------------|
+| `fluentbit-config-syntax`               | fluentbit   | any           | Broken ConfigMap → FluentBit CrashLoopBackOff                     |
+| `fluentbit-oom`                         | fluentbit   | any           | Memory limit too low → FluentBit OOMKilled                        |
+| `fluentbit-cpu-throttle`                | fluentbit   | graylog       | CPU limit too low → throughput collapse, messages lost            |
+| `opensearch-flood-stage-readonly`       | opensearch  | graylog       | Flood-stage trip → indices read-only                              |
+| `graylog-gelf-input-size-too-small`     | graylog     | graylog       | GELF input `max_message_size` too small → big logs dropped        |
+| `operator-helm-bad-image`               | operator    | any           | Bad image tag → operator ImagePullBackOff                         |
+
+## Runtime contract
+
+Scenarios assume a running logging stack with:
+
+- Cluster reachable via context `$KCTX` (`lib.sh` derives it from
+  `deploy/kind/.env`).
+- Namespaces: `logging`, plus `opensearch` / `graylog` /
+  `log-generator` as needed.
+- Services with `helmfile.yaml.gotmpl`-equivalent names:
+  `opensearch-cluster.opensearch`, `graylog-service.logging`,
+  `log-generator-svc.log-generator`.
+- Operator running in `logging` as helm release
+  `qubership-logging-operator` (only required for scenarios that do
+  `helm upgrade --reuse-values`: `fluentbit-oom`,
+  `fluentbit-cpu-throttle`, `operator-helm-bad-image`).
+
+`deploy/kind/` is one way to satisfy this contract.
 
 ## Workflow
 
 ```bash
+# bring up baseline (one-time, from repo root)
 cd deploy/kind
-# baseline once per session
+set -a && source .env && set +a
 helmfile -f helmfile.yaml.gotmpl apply
 
-cd fixtures
+# operate scenarios
+cd ../../test/agent-packages/scenarios
 ./fixture.sh list
-./fixture.sh apply  F3-disk-readonly
-# ... run the skill against the cluster ...
-./fixture.sh revert F3-disk-readonly
-./fixture.sh apply  F2-fluent-oom
-# ...
+./fixture.sh apply  fluentbit-oom
+# ... run the skill / eval against the cluster ...
+./fixture.sh revert fluentbit-oom
 ```
 
-**Policy**: one fixture active at a time. `apply` refuses if another is
+**Policy**: one scenario active at a time. `apply` refuses if another is
 already active — `revert` it first. State is tracked in `.state/`.
 
-## Per-fixture layout
+## Per-scenario layout
 
 ```
-F<id>-<slug>/
+<scenario-slug>/
   README.md        case description and injection mechanics
   apply.sh         introduces the failure
   revert.sh        restores baseline
-  values-patch.yaml   (optional) helm values overlay for helm-based fixtures
 ```
-
-## Notes on the kind stack
-
-- `BACKEND=graylog` is needed for F3 / F5b / F7 (uses OpenSearch + Graylog).
-- `BACKEND=victorialogs` is fine for F1 / F2 (collector-only).
-- FluentD is `install: false` by default in both backends. Fixtures F1 /
-  F2 / F5b target FluentBit only.
