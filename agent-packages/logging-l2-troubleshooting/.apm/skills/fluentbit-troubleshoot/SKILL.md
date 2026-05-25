@@ -35,34 +35,25 @@ kubectl -n <ns> get pod <pod> -o jsonpath='{.spec.containers[*].resources}'
 
 [references/symptoms.md](references/symptoms.md) — match against it; add patterns via `docs/troubleshooting/fluentbit.md` in the operator repo first.
 
-## Zone signal classification (refute contract)
+## Lookup and output
 
-Walk the four classes in order. Emit on the first match.
+1. Take the diagnostic-pass output above.
+2. For each entry in [references/symptoms.md](references/symptoms.md), evaluate its `match` block against the diagnostic-pass output. Collect every entry that matches.
+3. Emit the result in the schema from [references/shared-contract.md](references/shared-contract.md#expert-output-schema):
 
-**1. CLEAN**
-- All pods `Running`, no recent `OOMKilled` / `Evicted` / `CrashLoopBackOff`.
-- `kubectl logs --tail=500` clean of errors and warnings (no parser failures, no plugin init errors, no output retries, no panics).
-- Output endpoint configured AND reachable from the pod.
+```yaml
+findings:
+  - symptom_id: <id of the matched entry>
+    evidence: |
+      <verbatim lines / values referenced by the entry's evidence_template>
+    proposed_fix: |
+      <proposed_fix from the entry, instantiated with any concrete values>
+raw_diagnostic_pass: |
+  <abbreviated digest of the diagnostic-pass output above>
+```
 
-→ `hypothesis_refuted`, `signal_class: clean`.
+If the matched entry's `proposed_fix` warrants a structured operator action, also emit a `recommend` block per the shared contract, citing the matched `symptom_id` in `why`.
 
-**2. QUOTED**
-- Logs contain a verbatim citation of an external endpoint as the trigger: `[upstream] connection ... timed out`, `no upstream connections available`, `getaddrinfo <host>`, `connection refused to <host>`, or similar naming a host/port.
+## Anti-fabrication
 
-→ `hypothesis_refuted`, `signal_class: secondary_quoted`. Capture each quote verbatim in `cited_external_components`.
-
-**3. BACKPRESSURE** — all of:
-- Pods `OOMKilled` OR repeatedly restarting on OOM.
-- Output stanza present in the ConfigMap AND output endpoint reachable from the pod.
-- Memory limit is tight for the workload: **forwarder DaemonSet ≤ 128Mi**, **aggregator StatefulSet ≤ 512Mi**.
-- **AND a positive backpressure signal**: `kubectl logs --tail=500` shows output write errors or connection retries to the output target, OR FluentBit `/api/v1/metrics` shows non-zero growing `fluentbit_output_retries_total` / `fluentbit_output_dropped_records_total`.
-
-→ `hypothesis_refuted`, `signal_class: secondary_backpressure`.
-
-The positive-signal requirement is what separates this class from PRIMARY. OOM at a tight limit without any visible retry / error / dropped-records signal is just "memory misconfig" → PRIMARY. OOM at a tight limit AND output is visibly failing to drain = backpressure.
-
-**4. PRIMARY** (everything else with a signal — emit `recommend`):
-- ConfigMap reload error / parser failure / plugin init crash / internal panic.
-- Pods `Evicted` for non-memory reasons (disk pressure on host).
-- `OOMKilled` but memory limit is NOT tight by step-3 thresholds — treat as misconfig / leak, not backpressure.
-- Output not configured, or output endpoint genuinely unreachable (DNS / network — distinct from a quoted refusal).
+If no entry in the catalogue matches, return `findings: []` with a non-empty `raw_diagnostic_pass` digest. Do not invent a `symptom_id`. Do not infer or speculate. Do not emit a `recommend`. An empty `findings` array is a valid and expected outcome — the orchestrator handles routing from there.
