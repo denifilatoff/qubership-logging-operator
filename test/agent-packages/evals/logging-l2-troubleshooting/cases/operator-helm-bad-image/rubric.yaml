@@ -10,9 +10,12 @@ checks:
       graylog-disk-usage-investigate, opensearch-troubleshoot). The
       symptom belongs to `logging-operator-troubleshoot`, which is not
       shipped in this package; routing to a nearby skill as a substitute
-      would be wrong. Triage handing back to the engineer, or stopping
-      after the initial diagnostic pass with the observation captured, satisfies
-      the check.
+      would be wrong. No catalogue `symptom_id` covers this failure
+      mode (operator failures are out-of-scope per topology.md); if any
+      expert IS invoked it must return `findings: []` rather than
+      invent an id. Triage handing back to the engineer, or stopping
+      after the initial diagnostic pass with the observation captured,
+      satisfies the check.
   - id: operator-image-pull-identified
     description: >
       Transcript explicitly names the logging-operator pod as being in

@@ -7,10 +7,10 @@ checks:
       The chain of area-skill invocations ended at fluentbit-troubleshoot
       and that skill confirmed the cause. Earlier hops in the chain (if
       any) are acceptable as long as each one either confirmed-and-stopped
-      or refuted before the next was invoked — grade the final converging
-      skill, not the first pick. A run that ends in fluentd /
-      graylog-server / opensearch / graylog-disk-usage does not satisfy
-      the check, regardless of how it got there.
+      or returned empty findings before the next was invoked — grade
+      the final converging skill, not the first pick. A run that ends
+      in fluentd / graylog-server / opensearch / graylog-disk-usage
+      does not satisfy the check, regardless of how it got there.
   - id: config-parse-error-identified
     description: >
       Transcript names a parse / syntax error in the fluent-bit
@@ -18,8 +18,10 @@ checks:
       cluster — at minimum the pod's CrashLoopBackOff status from
       `kubectl get pods` plus either (a) the fluent-bit container log
       showing the parse error or (b) the offending content in the
-      ConfigMap data. Speculation without evidence does not satisfy
-      the check.
+      ConfigMap data. The fluentbit-troubleshoot expert must emit a
+      `findings:` array with `symptom_id: fluentbit-configmap-parse-error`
+      from the symptom catalogue. Speculation without evidence, or
+      empty findings, does not satisfy the check.
   - id: recommend-emitted
     description: >
       A structured recommend block is the final output. Its type

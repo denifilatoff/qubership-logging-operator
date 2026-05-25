@@ -7,10 +7,11 @@ checks:
       The chain of area-skill invocations ended at
       graylog-server-troubleshoot and that skill confirmed the cause.
       Earlier hops in the chain (if any) are acceptable as long as each
-      one either confirmed-and-stopped or refuted before the next was
-      invoked — grade the final converging skill, not the first pick.
-      A run that ends in fluentbit / fluentd / opensearch does not
-      satisfy the check, regardless of how it got there.
+      one either confirmed-and-stopped or returned empty findings
+      before the next was invoked — grade the final converging skill,
+      not the first pick. A run that ends in fluentbit / fluentd /
+      opensearch does not satisfy the check, regardless of how it got
+      there.
   - id: size-correlation-identified
     description: >
       Transcript explicitly correlates the loss with message size
@@ -18,8 +19,12 @@ checks:
       or names the GELF input `max_message_size` limit as the cause,
       backed by graylog-side evidence (e.g. `TooLongFrameException`
       in graylog-server logs, or the input's current
-      `max_message_size` value from `GET /api/system/inputs`).
-      Speculation without evidence does not satisfy the check.
+      `max_message_size` value from `GET /api/system/inputs`). The
+      graylog-server-troubleshoot expert must emit a `findings:` array
+      with a `symptom_id` from the graylog catalogue covering this
+      ingest failure mode (e.g. `graylog-unable-to-read-messages`).
+      Speculation without evidence, or empty findings, does not
+      satisfy the check.
   - id: triage-routed-via-graylog-input-drop
     description: >
       Verifies the fast routing path for this case: triage's initial
@@ -32,9 +37,10 @@ checks:
       zone — Graylog drops oversized GELF frames silently, FluentBit
       has no retry / error feedback. The cascade is only observable on
       the Graylog side. Triage's initial diagnostic pass includes a Graylog log
-      grep specifically for this, and the signal-table seed routes the
-      match to graylog-server with high prior. Going through FluentBit
-      first means the fast-path signal was missed.
+      grep specifically for this, and the resulting symptom_id routes
+      the match to graylog-server with high prior. Going through
+      FluentBit first means the fast-path signal was missed (fluentbit
+      would return empty findings, wasting a hop).
 
       Pass-fail procedure (apply literally):
 

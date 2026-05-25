@@ -7,10 +7,10 @@ checks:
       The chain of area-skill invocations ended at opensearch-troubleshoot
       and that skill confirmed the cause. Earlier hops in the chain (if
       any) are acceptable as long as each one either confirmed-and-stopped
-      or refuted before the next was invoked — grade the final converging
-      skill, not the first pick. A run that ends in fluentbit / fluentd /
-      graylog-server / graylog-disk-usage does not satisfy the check,
-      regardless of how it got there.
+      or returned empty findings before the next was invoked — grade
+      the final converging skill, not the first pick. A run that ends
+      in fluentbit / fluentd / graylog-server / graylog-disk-usage
+      does not satisfy the check, regardless of how it got there.
   - id: readonly-block-identified
     description: >
       Transcript explicitly names the read-only state on the affected
@@ -32,9 +32,12 @@ checks:
           values below current `_cat/allocation` disk.percent.
 
       Both the index-block fact and one of the two cause classes must
-      be backed by explicit OpenSearch API output. Naming the block
-      without a cause, or speculating about disk fill without API
-      evidence either way, does not satisfy the check.
+      be backed by explicit OpenSearch API output. The
+      opensearch-troubleshoot expert must emit a `findings:` array
+      with `symptom_id: opensearch-index-read-only` from the symptom
+      catalogue. Naming the block without a cause, speculating about
+      disk fill without API evidence either way, or returning empty
+      findings does not satisfy the check.
   - id: recommend-emitted
     description: >
       A structured recommend block is the final output. The change

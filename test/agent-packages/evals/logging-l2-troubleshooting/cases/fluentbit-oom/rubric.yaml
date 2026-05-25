@@ -7,38 +7,30 @@ checks:
       The chain of area-skill invocations ended at fluentbit-troubleshoot
       and that skill confirmed the cause. Earlier hops in the chain (if
       any) are acceptable as long as each one either confirmed-and-stopped
-      or refuted before the next was invoked — grade the final converging
-      skill, not the first pick. A run that ends in fluentd /
-      graylog-server / opensearch / logging-operator does not satisfy
-      the check, regardless of how it got there.
+      or returned empty findings before the next was invoked — grade the
+      final converging skill, not the first pick. A run that ends in
+      fluentd / graylog-server / opensearch / logging-operator does not
+      satisfy the check, regardless of how it got there.
   - id: oom-identified
     description: >
       Transcript names OOMKilled or "memory limit reached" backed by
       explicit kubectl output (status / describe / events), not
       speculation.
-  - id: fluentbit-classified-as-primary
+  - id: fluentbit-emits-finding-with-oom-id
     description: >
       Verifies that fluentbit-troubleshoot, when invoked for this
-      internal-memory-misconfig case (OOM on a tight limit without
-      any observable backpressure signal — no output retries, no
-      connection errors in logs), classifies its zone as primary
-      and emits a recommend rather than a hypothesis_refuted.
-
-      This is the inverse of the cascade-refute check used elsewhere:
-      here the expert must NOT refute, because there is no downstream
-      cause. The BACKPRESSURE class in the expert's decision tree
-      requires a positive backpressure signal (output retries
-      climbing, dropped records, connection errors) in addition to
-      OOM + tight limit + reachable output. In this scenario none of
-      those positive signals are present, so the expert must fall
-      through to PRIMARY.
+      internal-memory-misconfig case, emits a `findings:` array
+      containing a `symptom_id` corresponding to the OOM symptom from
+      `references/symptoms.md` (e.g. `fluentbit-oomkilled-tight-limit`),
+      plus a `recommend` block proposing a memory-limit increase.
+      The expert must NOT return empty findings (that would route the
+      chain downstream incorrectly per routing-policy rule 1).
 
       Pass-fail procedure (apply literally):
 
       1. Scan `toolCalls` for entries with `name == "Skill"` and
          `input.skill == "fluentbit-troubleshoot"`. If zero matches,
-         PASS vacuously (the `area-correct` check covers that
-         separately).
+         FAIL (the area-correct check is then also failing).
 
       2. Focus on the FIRST such entry. Identify the assistantMessages
          emitted strictly AFTER that Skill call and strictly BEFORE
@@ -46,21 +38,16 @@ checks:
          further Skill call follows).
 
       3. In those messages, search for a YAML or fenced code block
-         containing the literal line `recommend:` (followed by the
-         recommend schema fields: `what:`, `why:`, etc.).
+         containing:
+           - the literal line `findings:` followed by at least one
+             list entry with `symptom_id:` set to an OOM-related id
+             (any id whose YAML record's `match` includes
+             `pod_state: OOMKilled` or whose name contains `oom`),
+           - AND a `recommend:` block with `what:` mentioning the
+             memory limit on fluentbit.
 
-      4. In the SAME message range, verify there is NO YAML block
-         containing `hypothesis_refuted: true`.
-
-      5. PASS only if step 3 finds a recommend block AND step 4
-         finds no refute block. FAIL otherwise — in particular, FAIL
-         when:
-           - the expert emitted `hypothesis_refuted: true` with any
-             `signal_class` (the design says primary triggers
-             recommend, not refute);
-           - the expert emitted neither a recommend nor a refute;
-           - both a recommend and a refute appear in the same hop
-             (contract violation: they are mutually exclusive).
+      4. PASS only if both are present. FAIL if findings is empty
+         or if no recommend block appears.
   - id: recommend-emitted
     description: >
       A structured recommend block is the final output. Its type

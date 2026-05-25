@@ -7,10 +7,10 @@ checks:
       The chain of area-skill invocations ended at fluentbit-troubleshoot
       and that skill confirmed the cause. Earlier hops in the chain (if
       any) are acceptable as long as each one either confirmed-and-stopped
-      or refuted before the next was invoked — grade the final converging
-      skill, not the first pick. A run that ends in fluentd /
-      graylog-server / opensearch / graylog-disk-usage does not satisfy
-      the check, regardless of how it got there.
+      or returned empty findings before the next was invoked — grade
+      the final converging skill, not the first pick. A run that ends
+      in fluentd / graylog-server / opensearch / graylog-disk-usage
+      does not satisfy the check, regardless of how it got there.
   - id: cpu-throttle-identified
     description: >
       Transcript names CPU throttling (or, equivalently, an undersized
@@ -30,9 +30,13 @@ checks:
           fluent-bit's `/api/v1/metrics` showing input/output record
           counts barely moving under sustained load.
 
-      Speculation that "the pod is slow" without either an explicit
-      limit comparison or a direct saturation signal does not satisfy
-      the check.
+      The fluentbit-troubleshoot expert must emit a `findings:` array
+      with `symptom_id: fluentbit-connection-timeout-graylog` (the
+      catalogue entry whose `proposed_fix` is to raise the fluent-bit
+      CPU limit — CPU throttle surfaces as connection-timeout symptoms
+      in the logs). Speculation that "the pod is slow" without either
+      an explicit limit comparison or a direct saturation signal, or
+      empty findings, does not satisfy the check.
   - id: recommend-emitted
     description: >
       A structured recommend block is the final output, raising the
