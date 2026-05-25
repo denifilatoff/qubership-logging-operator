@@ -29,10 +29,10 @@ The transcript is a JSON document with three top-level keys:
   statement.
 
 - `assistantMessages` — array of all assistant text messages from the
-  session, in chronological order. Intermediate `hypothesis_refuted:`
-  and `recommend:` YAML blocks emitted by area skills mid-chain live
-  here, NOT in `result`. When a rubric check asks about an
-  intermediate refute or a per-hop output, search this array.
+  session, in chronological order. Intermediate `findings:` and
+  `recommend:` YAML blocks emitted by area skills mid-chain live here,
+  NOT in `result`. When a rubric check asks about a per-hop expert
+  output, search this array.
 
 - `toolCalls` — array of tool invocations in chronological order, each
   with `name`, `input`, `output`, and `is_error`. Authoritative for
@@ -50,16 +50,15 @@ To locate a specific area skill's output: find its Skill call in
 and the next Skill call (or, for the last invocation, between the call
 and the final `result`).
 
-Refute / recommend YAML schemas (canonical shapes the experts emit):
+Expert output and recommend schemas (canonical shapes the experts emit):
 
-  hypothesis_refuted: true
-  skill: <skill-name>
-  signal_class: clean | secondary_backpressure | secondary_quoted
-  diagnostic_pass_evidence: |
+  findings:
+    - symptom_id: <id from references/symptoms.md, or "unrecognized">
+      evidence: |
+        ...
+      proposed_fix: <text or null>
+  raw_diagnostic_pass: |
     ...
-  cited_external_components:
-    - ...
-  reason: ...
 
   recommend:
     what: ...
@@ -69,9 +68,12 @@ Refute / recommend YAML schemas (canonical shapes the experts emit):
     snapshot: ...
     confidence: ...
 
-A `hypothesis_refuted: true` block and a `recommend:` block are
-mutually exclusive in a single area skill's turn. A refute means the
-chain advances; a recommend means the case is closed at that skill.
+An expert returns `findings: []` with a non-empty `raw_diagnostic_pass`
+when no catalogue entry matched. This is a valid outcome; do not penalise
+it unless the rubric explicitly requires a non-empty finding.
+
+A `recommend:` block accompanies a non-empty `findings` array when the
+matched symptom's proposed_fix warrants a structured operator action.
 
 {{output}}
 
