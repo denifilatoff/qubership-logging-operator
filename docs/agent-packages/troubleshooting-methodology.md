@@ -16,9 +16,15 @@ These rules apply across both levels and override any local convenience.
 
 **References, not duplication.** Domain troubleshooting knowledge — symptoms, signs, solutions — lives in dedicated reference documents. Each skill has its own set: a knowledge-area skill may point at one runbook, several, or none, depending on what already exists for its area. A skill does not copy content from a reference into itself; it loads the relevant slice on demand by reference. Adding a new pattern means adding it to the appropriate reference first, then linking it from the skill.
 
+**Lookups by grep, not by retrieval.** References are searched with `grep` and `Read`, not retrieved from a vector store. The skill body describes the shape of each reference it depends on (which columns exist, what the row key is, what to search by, how rows are delimited) so the agent knows how to query it without scanning the whole file. This forces references to be designed for deterministic lookup: stable headings, predictable layouts, searchable keys, one fact per row. No out-of-package state, no offline indexing step, no infrastructure beyond the files in the skill package. A reference that cannot be grepped against a known key is prose, not a reference, and belongs somewhere else.
+
 **Do-no-harm.** No skill executes a mutating action against a live system or against the ticket-tracker. Mutations are emitted as structured `recommend` blocks; the operator decides whether and when to apply them.
 
 **Read-before-recommend.** A `recommend` from the troubleshooting agent is a proposed mutation of system state. Before proposing it, the agent captures a `read-safe` snapshot of the state on which the proposal depends, and attaches that snapshot to the block. Relevant state is what the action mutates plus what proves the action is still needed — not the whole namespace. Example: a Graylog restart recommendation carries container status, recent error tail, free disk, memory pressure. The snapshot lets the operator verify the recommendation is still valid when they read it and gives a rollback baseline. If the state cannot be read, the skill escalates instead of recommending blind.
+
+**Kubernetes-only execution surface.** The skills assume a Kubernetes cluster reachable via `kubectl`. SSH-driven procedures, on-host `docker` shells, on-VM filesystem paths (`/srv/docker/...`), and non-K8s installers (e.g. the `external-logging-installer` Ansible playbook) are out of scope for diagnosis. If the engineer's environment is one of those, the skill stops and hands back rather than guessing.
+
+**HTTP/REST exception to the K8s-only rule.** Endpoints exposed by Graylog and OpenSearch over HTTP — `/api/system/journal`, `/_cluster/health`, `/_cat/indices`, and the rest — are reachable identically regardless of where the server runs (K8s pod, VM, bare-metal). HTTP probes stay in scope and may partially cover VM-deployed Graylog/OpenSearch. The limit is explicit: the skill *only* sees what the HTTP surface returns. If a symptom can only be resolved by inspecting the underlying container (logs, exec, filesystem) and the deployment is not K8s, the skill must recognise it has run out of evidence and hand back to the engineer — never extrapolate cluster-internal state from the HTTP API alone.
 
 ---
 
@@ -108,29 +114,30 @@ A **knowledge area** is a topic that requires its own body of expertise to troub
 
 | Area | Skill |
 |---|---|
-| Graylog server | `troubleshoot-graylog-server` |
-| OpenSearch / Elasticsearch cluster | `troubleshoot-opensearch` |
-| Victoria Logs | `troubleshoot-victoria-logs` |
-| MongoDB (Graylog metadata store) | `troubleshoot-mongodb` |
-| FluentD | `troubleshoot-fluentd` |
-| FluentBit | `troubleshoot-fluentbit` |
-| Monitoring stack (Prometheus exporters, Grafana) | `troubleshoot-monitoring` |
-| Backup tooling | `troubleshoot-backup` |
+| Graylog server | `graylog-server-troubleshoot` |
+| OpenSearch / Elasticsearch cluster | `opensearch-troubleshoot` |
+| Victoria Logs | `victoria-logs-troubleshoot` |
+| MongoDB (Graylog metadata store) | `mongodb-troubleshoot` |
+| FluentD | `fluentd-troubleshoot` |
+| FluentBit | `fluentbit-troubleshoot` |
+| Monitoring stack (Prometheus exporters, Grafana) | `monitoring-troubleshoot` |
+| Backup tooling | `backup-troubleshoot` |
 
 **Deployment areas** — failures during installation, upgrade, or reconciliation.
 
 | Area | Skill |
 |---|---|
-| ArgoCD deployment | `troubleshoot-argocd-deployment` |
-| Jenkins deployment | `troubleshoot-jenkins-deployment` |
-| Ansible VM installer | `troubleshoot-ansible-vm-installer` |
-| Logging operator and Helm chart | `troubleshoot-logging-operator` |
+| ArgoCD deployment | `argocd-deployment-troubleshoot` |
+| Jenkins deployment | `jenkins-deployment-troubleshoot` |
+| Logging operator and Helm chart | `logging-operator-troubleshoot` |
+
+The Ansible VM installer (`external-logging-installer` playbook) deploys Graylog onto a Linux VM via Docker — out of scope per the K8s-only invariant. L1 still recognises tickets pointing at it and routes them out (escalate-to-installer-team), but there is no corresponding L2 knowledge-area skill in this package.
 
 **Narrow investigation skills** — focused, callable both standalone by the engineer and as sub-routines by a knowledge-area skill. They are not full areas; they are reusable diagnostic procedures with a defined input and output.
 
 | Skill | Purpose |
 |---|---|
-| `investigate-graylog-disk-usage` | Identify which microservices or namespaces produce the bulk of the log volume. Output: ranked breakdown of producers by bytes over a chosen window. |
+| `graylog-disk-usage-investigate` | Identify which microservices or namespaces produce the bulk of the log volume. Output: ranked breakdown of producers by bytes over a chosen window. |
 
 **Cross-cutting knowledge** is shared across several areas: Kubernetes pod debugging, resource limits and QoS, OpenShift security primitives, TLS and PKI, L7 routing and ingress, GELF protocol mechanics, custom parsers and multiline. Packaged as shared modules loaded by knowledge-area skills on demand. Not invoked directly by the engineer.
 
@@ -141,7 +148,7 @@ A **knowledge area** is a topic that requires its own body of expertise to troub
 **Ticket-driven path:**
 1. A ticket arrives. The engineer invokes `logging-l1-triage` from their local coding agent (Claude Code, Cursor, OpenCode, Codex, etc.).
 2. `logging-l1-triage` disambiguates symptom scope, then returns `recommend_resolve`, `bounce_back`, or `escalate`.
-3. On `escalate` the engineer invokes `logging-l2-triage` with the handoff. At this point the engineer's local machine must already have access to the target environment (`kubectl` / SSH / API endpoints reachable from where the coding agent runs); the skill executes commands through that access.
+3. On `escalate` the engineer invokes `logging-l2-triage` with the handoff. At this point the engineer's local machine must already have access to the target Kubernetes cluster — `kubectl` and any HTTP endpoints exposed by Graylog / OpenSearch must be reachable from where the coding agent runs; the skill executes commands through that access.
 4. `logging-l2-triage` inspects the live cluster and selects a knowledge-area skill.
 5. The knowledge-area skill diagnoses, may chain to other skills via `logging-l2-triage`, and ultimately produces a `recommend`.
 6. The operator decides on the `recommend`. Execution is manual. Audit trail stays in the ticket.
@@ -154,10 +161,10 @@ A **knowledge area** is a topic that requires its own body of expertise to troub
 
 ## 5. Skill naming
 
-A skill name has two parts: an optional area prefix and a mandatory purpose verb plus target. The verb's position depends on whether a prefix is present:
+A skill name is `[<area>-]<target>-<verb>`: an optional area prefix, a target, and a mandatory purpose verb at the end. Verb-last keeps all skills for a given target adjacent in any sorted list (file tree, skill picker, docs index).
 
 - **With area prefix** — `<area>-<target>-<verb>`. Example: `logging-l1-triage`.
-- **Without area prefix** — `<verb>-<target>`. Example: `troubleshoot-fluentbit`.
+- **Without area prefix** — `<target>-<verb>`. Example: `fluentbit-troubleshoot`.
 
 **Purpose verb.** One of:
 - `triage` — assess and route. No diagnosis, no fix.
@@ -169,9 +176,9 @@ The verb is not optional. A skill named after a product alone (e.g. `graylog-ser
 **Area prefix.** Used only for high-level skills whose bare name risks colliding with skills from other skill-packs. The prefix is the broad domain of the skill-pack — for the logging-stack pack it is `logging-`.
 
 - High-level skills get the prefix: `logging-l1-triage`, `logging-l2-triage`. Bare `l1-triage` could plausibly exist in a monitoring or database skill-pack.
-- Knowledge-area and investigation skills do not get the prefix when the target itself is self-describing: `troubleshoot-graylog-server`, `troubleshoot-opensearch`, `troubleshoot-fluentd`, `investigate-graylog-disk-usage`. "Graylog server" already says which domain.
+- Knowledge-area and investigation skills do not get the prefix when the target itself is self-describing: `graylog-server-troubleshoot`, `opensearch-troubleshoot`, `fluentd-troubleshoot`, `graylog-disk-usage-investigate`. "Graylog server" already says which domain.
 
-**Packages** follow the same `<area>-<target>-<verb>` shape when they wrap a single area (e.g. `logging-l1-triage`, `logging-l2-troubleshooting`). The package directory name does not have to equal the name of any skill inside it; a multi-skill package — like `logging-l2-troubleshooting`, which contains `logging-l2-triage`, four `troubleshoot-*` skills, and `investigate-graylog-disk-usage` — is named topically, by what the package is about.
+**Packages** follow the same `<area>-<target>-<verb>` shape when they wrap a single area (e.g. `logging-l1-triage`, `logging-l2-troubleshooting`). The package directory name does not have to equal the name of any skill inside it; a multi-skill package — like `logging-l2-troubleshooting`, which contains `logging-l2-triage`, four `*-troubleshoot` skills, and `graylog-disk-usage-investigate` — is named topically, by what the package is about.
 
 **Examples.**
 
@@ -179,9 +186,9 @@ The verb is not optional. A skill named after a product alone (e.g. `graylog-ser
 |---|---|---|---|
 | `logging-l1-triage` | triage | logging | l1 |
 | `logging-l2-triage` | triage | logging | l2 |
-| `troubleshoot-graylog-server` | troubleshoot | — | graylog-server |
-| `troubleshoot-fluentbit` | troubleshoot | — | fluentbit |
-| `investigate-graylog-disk-usage` | investigate | — | graylog-disk-usage |
+| `graylog-server-troubleshoot` | troubleshoot | — | graylog-server |
+| `fluentbit-troubleshoot` | troubleshoot | — | fluentbit |
+| `graylog-disk-usage-investigate` | investigate | — | graylog-disk-usage |
 
 ---
 
@@ -194,3 +201,4 @@ The verb is not optional. A skill named after a product alone (e.g. `graylog-ser
 - Evaluation framework for the skills.
 - Evolution of the action tiers beyond `read-safe` / `read-heavy` / `recommend`.
 - Ticket deduplication against the ticket-tracker API.
+- Non-K8s execution surfaces — VM-deployed Graylog with on-host `docker` shells, SSH-driven procedures, and the `external-logging-installer` Ansible playbook. HTTP/REST endpoints exposed by Graylog and OpenSearch remain in scope per §1 even when the server happens to run outside K8s.

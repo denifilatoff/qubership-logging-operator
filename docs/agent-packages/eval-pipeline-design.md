@@ -1,8 +1,8 @@
-# Skill Eval Pipeline Design — L2 v1
+# Skill Eval Pipeline Design — L2
 
-**Status:** draft v0.1, 2026-05-22. First-version design of the automated e2e eval pipeline for skills in this package, satisfying the constraints stated in `agent-packages/logging-l1-triage/docs/skill-evaluation-methodology.md` and the framework choice in `agent-packages/logging-l1-triage/docs/eval-framework-survey.md`.
+**Status:** 2026-05-23. Design of the automated e2e eval pipeline for skills in this package, satisfying the constraints stated in `agent-packages/logging-l1-triage/docs/skill-evaluation-methodology.md` and the framework choice in `agent-packages/logging-l1-triage/docs/eval-framework-survey.md`.
 
-This document is scoped to **L2 only** (e2e against a live kind cluster). L1 (ticket classification) needs a labelled corpus first and is out of scope for v1.
+This document is scoped to **L2 only** (e2e against a live kind cluster). L1 (ticket classification) needs a labelled corpus first and is out of scope.
 
 ---
 
@@ -20,16 +20,17 @@ The pipeline produces, per fixture, a `(with-package, no-package)` pass-rate del
 
 | Decision | Value |
 |---|---|
-| Scope v1 | L2 only |
+| Scope | L2 only |
 | Lifecycle | External orchestrator script around `promptfoo eval` |
 | A/B mechanism | APM package installed vs not installed (real `apm install --target claude` into a fresh workdir), not "SKILL.md present vs absent" |
-| Matrix v1 | `(claude-agent-sdk, claude-haiku-4-5)` |
+| Matrix | `(claude-agent-sdk, claude-haiku-4-5)` |
 | Judge | `(claude-agent-sdk, claude-opus-4-7)`, routed via the user's Claude Code subscription (no API key) |
 | Layout | `agent-packages/logging-l2-troubleshooting/evals/` (per-package, self-contained) |
 | Cluster fixtures | Stay in `deploy/kind/fixtures/`, linked from eval fixtures by ID |
-| Fixtures v1 | `F2-fluentbit-oom`, `F7-gelf-input-size` (F4 dropped — its target area `logging-operator-troubleshoot` is not shipped in this package; deferred per §11 follow-ups) |
+| Fixtures | `F1-fluentbit-config-syntax`, `F2-fluentbit-oom`, `F3-opensearch-readonly`, `F4-helm-bad-image` (negative-case), `F5b-fluentbit-cpu-throttle`, `F7-gelf-input-size` |
+| Prompt language | English. Engineer-driven prompts are written in English regardless of the source ticket language. |
 | Variance | `--repeat 3` by default, overridable |
-| CI | Local-only in v1; CI wiring is a follow-up |
+| CI | Local-only; CI wiring is a follow-up |
 
 ---
 
@@ -55,13 +56,16 @@ agent-packages/logging-l2-troubleshooting/
     │   ├── agent.yaml                   # claude-agent-sdk + haiku-4.5
     │   └── judge.yaml                   # claude-agent-sdk + opus-4-7, no tools
     ├── fixtures/
-    │   ├── F2-fluentbit-oom/
+    │   ├── F1-fluentbit-config-syntax/
     │   │   ├── meta.yaml
     │   │   ├── prompt.txt
     │   │   ├── ground_truth.md
     │   │   └── rubric.yaml
+    │   ├── F2-fluentbit-oom/             # (same four files)
+    │   ├── F3-opensearch-readonly/
+    │   ├── F4-helm-bad-image/            # negative-case (see §4.6)
+    │   ├── F5b-fluentbit-cpu-throttle/
     │   └── F7-gelf-input-size/
-    │       └── (same four files)
     └── results/                         # gitignored; promptfoo + aggregated reports
 ```
 
@@ -73,7 +77,7 @@ Cluster-side artefacts stay in `deploy/kind/fixtures/<id>/` (apply.sh, revert.sh
 make eval
   └─ orchestrator.sh
        run_id=$(date +%Y%m%dT%H%M%S)
-       for fix in F2-fluentbit-oom F7-gelf-input-size:
+       for fix in fixtures/F*-*/:
          workdir_with=$(prep-workdir.sh "$fix" with-pkg "$run_id")  # apm install here
          workdir_no=$(prep-workdir.sh   "$fix" no-pkg   "$run_id")  # empty dir
          deploy/kind/fixtures/fixture.sh apply "${meta.cluster_fixture}"
@@ -98,7 +102,7 @@ testCase × variant(with-pkg | no-pkg) × repeat 3
  └─ assertions:
       ├─ llm-rubric (provider = judge)              # binary checks from rubric.yaml
       ├─ skill-used: logging-l2-triage              # promptfoo-native
-      ├─ skill-used: <expected_area>                # from meta.yaml
+      ├─ skill-used: <expected_area>                # from meta.yaml; dropped when expected_area=none (F4)
       └─ token / latency captured automatically
 ```
 
@@ -166,7 +170,7 @@ description: >
 
 ### 4.2. `prompt.txt`
 
-Plain text, one paragraph at most. Engineer-driven path from `troubleshooting-methodology.md §2.2` — a vague complaint, not a structured handoff. No hints, no leading wording that gives away the area.
+Plain text, English, one paragraph at most. Engineer-driven path from `troubleshooting-methodology.md §2.2` — a vague complaint, not a structured handoff. No hints, no leading wording that gives away the area.
 
 ### 4.3. `rubric.yaml` — 4-6 binary checks
 
@@ -196,16 +200,26 @@ Short markdown describing the expected diagnosis, the expected recommend, and th
 
 Parameterised by `{{ground_truth}}`, `{{rubric_yaml}}`, `{{transcript}}`. Returns strict JSON with `id`, `pass`, `evidence` per check, plus `overall_pass`. Sharing one template across fixtures lets us measure judge drift across releases of Opus.
 
+### 4.6. Negative-case fixtures
+
+A fixture whose natural target area lies outside this package is encoded as a negative case. The current example is `F4-helm-bad-image`: the symptom belongs to `logging-operator-troubleshoot`, which is listed under "Areas not covered yet" in the L2 triage signal table. The expected behaviour is for triage to **hand back to the engineer with the observation and stop**, not to route into a nearby area-skill as a substitute.
+
+Shape:
+
+- `meta.yaml` sets `expected_area: none`. The rendered promptfoo config drops the second `skill-used` assertion when this value is `none`; `skill-used: logging-l2-triage` still applies.
+- `rubric.yaml` replaces the positive `area-correct` check with an inverted `no-misroute` check (pass if no area-specific skill was invoked after triage), and replaces `<symptom>-identified` with a check anchored to the negative case's smoking gun (e.g. `operator-image-pull-identified` for F4).
+- `ground_truth.md` carries a "Negative criteria" section listing the skills and recommends the agent must NOT produce. The judge anchors the negative checks to that section.
+
 ---
 
 ## 5. Variance, repeats, cost
 
-Default `--repeat 3` for v1, overridable via `make eval REPEATS=5`. Methodology §4 calls for 3–5; 3 is the lower bound that still surfaces non-determinism without tripling cost.
+Default `--repeat 3`, overridable via `make eval REPEATS=5`. Methodology §4 calls for 3–5; 3 is the lower bound that still surfaces non-determinism without tripling cost.
 
-Per run, v1:
+Per full run:
 
-- 2 fixtures × 2 variants × 3 repeats = **12 agent transcripts**
-- 12 judge invocations
+- 6 fixtures × 2 variants × 3 repeats = **36 agent transcripts**
+- 36 judge invocations
 - Wall-clock dominated by `apply` / `revert` and Haiku reasoning loops, not the model API itself.
 
 ---
@@ -225,14 +239,21 @@ Serial execution is preserved by the "one fixture active" invariant. Parallelism
 
 ## 7. Reporting
 
-`promptfoo` natively produces:
+The orchestrator passes both a `.json` and a `.html` path to `promptfoo eval --output`. Per fixture this produces:
 
-- `results/<run-id>/<fix>.json` — raw per-fixture result
-- `results/<run-id>/report.html` — interactive table `(fixture × variant × repeat) → pass/fail, tokens, latency`
+- `results/<run-id>/<fix>.json` — raw per-fixture result, consumed by `aggregate.sh`.
+- `results/<run-id>/<fix>.html` — static, self-contained `(variant × repeat) → pass/fail, tokens, latency` table for that fixture. Open directly in a browser; no server needed.
 
 The orchestrator adds, on top:
 
 - `results/<run-id>/summary.md` — pass-rate `with-pkg` vs `no-pkg` per fixture and the delta. This is the methodology's primary measure (§3): the number that justifies the skill's existence.
+
+For cross-run browsing (any historical eval, sortable / filterable), use the local promptfoo viewer:
+
+```bash
+cd agent-packages/logging-l2-troubleshooting/evals
+npx promptfoo@latest view   # serves http://localhost:15500, reads ~/.promptfoo/promptfoo.db
+```
 
 ---
 
@@ -246,23 +267,21 @@ Methodology §2 forbids vendor-lock-in. The pipeline isolates the locked surface
 
 ---
 
-## 9. Out of scope for v1
+## 9. Out of scope
 
 - L1 classification eval (no ticket corpus yet).
 - CI integration (GitHub Actions, cluster bootstrap inside CI).
-- Second `(harness, model)` cell (OpenCode, local 7B). Added once v1 is stable.
+- Second `(harness, model)` cell (OpenCode, local 7B).
 - Multi-judge majority vote. One Opus judge is enough until we see disagreement noise.
 - Parallel fixture execution across multiple kind clusters.
 - Cost/budget gating. Track tokens; do not gate yet.
 - Regression gating against baseline pass-rates (the "did this PR regress the skill?" question).
 
-These each get their own follow-up spec once v1 produces real numbers.
-
 ---
 
 ## 10. Resolved questions
 
-Verified against apm 0.14.1 and promptfoo (latest via `npx promptfoo@latest`, 2026-05-22).
+Verified against apm 0.14.1 and promptfoo (latest via `npx promptfoo@latest`).
 
 - **Resolved: `apm install` of a local source.** `apm install <abs-path>/agent-packages/logging-l2-troubleshooting --target claude --frozen --verbose` works from any empty cwd; auto-creates `apm.yml`. `--frozen` requires `apm.lock.yaml`, so the first call in a fresh workdir must use `--update` (deprecated in favour of `apm update`, but accepted) to generate the lock — `prep-workdir.sh` does this on its first invocation, then subsequent runs use `--frozen`. Output layout: `.claude/skills/<skill-id>/SKILL.md` (one dir per skill) and `.claude/rules/<instruction>.md` for the package instruction file. `apm_modules/` is auto-added to `.gitignore`. For the no-pkg variant, leave the workdir empty (no `.claude/`).
 - **Resolved: promptfoo `claude-agent-sdk` provider with Claude Code session.** Provider id is `anthropic:claude-agent-sdk` (the bare `claude-agent-sdk` id is not recognised). The provider requires the `@anthropic-ai/claude-agent-sdk` npm package to be resolvable from the cwd (`npm install @anthropic-ai/claude-agent-sdk` in the eval root once). To skip `ANTHROPIC_API_KEY`, set `config.apiKeyRequired: false` — the provider then routes through the local Claude Code session (`~/.claude/.credentials.json` / macOS keychain). Verified by a `pong` round-trip against `claude-haiku-4-5` with `ANTHROPIC_API_KEY` unset.
@@ -272,51 +291,36 @@ Verified against apm 0.14.1 and promptfoo (latest via `npx promptfoo@latest`, 20
 
 ---
 
-## 11. First-run findings
+## 11. Observed performance
 
-**Run:** `20260522T214308Z`, 2026-05-23, `make eval REPEATS=3`.
-**Matrix:** `(claude-agent-sdk, claude-haiku-4-5)` agent, `(claude-agent-sdk, claude-opus-4-7)` judge.
+Latest reference numbers from `make eval REPEATS=3` against the current fixture set.
+Matrix: `(claude-agent-sdk, claude-haiku-4-5)` agent, `(claude-agent-sdk, claude-opus-4-7)` judge.
 
-### Observed deltas
-
-| Fixture | with-pkg mean score | no-pkg mean score | delta | mean checks (with-pkg) | variance across 3 repeats |
+| Fixture | with-pkg | no-pkg | delta | with-pkg mean X/N | triage-ran (with / no) |
 |---|---|---|---|---|---|
-| F2-fluentbit-oom | 0.83 | 0.00 | +0.83 | 4.0/6 | None — all three with-pkg repeats scored identically at 4/6; all three no-pkg at 0/6. |
-| F7-gelf-input-size | 0.75 | 0.00 | +0.75 | 3.0/6 | Visible — with-pkg scores were 2/6, 4/6, 3/6 across the three repeats; no-pkg uniformly 0/6. |
+| F1-fluentbit-config-syntax | 0.83 | 0.03 | +0.80 | 4.0/6 | 3/3 vs 0/3 |
+| F2-fluentbit-oom           | 0.83 | 0.00 | +0.83 | 4.0/6 | 3/3 vs 0/3 |
+| F3-opensearch-readonly     | 0.69 | 0.03 | +0.66 | 2.3/6 | 3/3 vs 0/3 |
+| F4-helm-bad-image          | 0.94 | 0.11 | +0.83 | 5.3/6 | 3/3 vs 0/3 |
+| F5b-fluentbit-cpu-throttle | 0.75 | 0.08 | +0.67 | 3.0/6 | 3/3 vs 0/3 |
+| F7-gelf-input-size         | 0.75 | 0.00 | +0.75 | 3.0/6 | 3/3 vs 0/3 |
 
-`skill-used` (`logging-l2-triage`): with-pkg 3/3 on both fixtures; no-pkg 0/3 on both (no-pkg invariably picked `superpowers:systematic-debugging` instead).
+Notes:
 
-### What worked
+- Every fixture shows a clear positive delta; with-pkg always beats no-pkg, on every repeat, on every fixture.
+- `skill-used: logging-l2-triage` fires deterministically per branch. No-pkg invariably falls back to `superpowers:systematic-debugging`.
+- F4 (negative-case) earns the highest with-pkg score — the package keeps triage from misrouting into a covered area-skill.
+- F3 has the largest gap to full pass (2.3/6 with-pkg). The OpenSearch path requires combining `_cluster/settings` evidence with per-index `read_only_allow_delete` evidence; missing either drops two checks. Worth targeted rubric or skill-content review.
+- The eval is not saturating at haiku-tier — headroom remains on every fixture except F4, which is by design coarse (hand-back is binary).
 
-- The methodology's primary measure (with-pkg vs no-pkg delta) holds clearly on both fixtures at `REPEATS=3`: every with-pkg repeat outscored every no-pkg repeat on both fixtures.
-- Skill selection is deterministic per branch: with the package installed, the agent always invoked `logging-l2-triage`; without it, the agent always fell back to `superpowers:systematic-debugging`. A strong signal that the skill's description and triggering language are doing their job.
-- The fixture orchestrator's apply / revert / DS-restart between fixtures kept the cluster baseline healthy for the second fixture — F7 ran cleanly after F2 completed, no degradation observed.
-- Run completed end-to-end without orchestrator intervention. No fatal revert, no wedged agent.
+### Known limitations
 
-### What surprised
+- Per-check `pass-rate` from the judge's `checks[]` array is not surfaced in the aggregator. Promptfoo keeps only the `reason` string from the judge response, so we recover only mean X/N from the reason text via regex. To get per-check rates we need a custom assertion that side-writes the judge JSON, or a promptfoo patch.
+- `tokenUsage` and `cost` are reported per provider call, but the judge component's `cost` field is `0` on the agent-sdk path; reported cost is agent-only.
 
-- F2 had **zero observed variance** across 3 repeats (all 4/6), while F7 showed real variance (2/6, 4/6, 3/6). Either F2's rubric is anchored on checks the agent reliably gets right-or-wrong, or the F2 task itself has less ambiguity in the "good answer" surface. Worth watching at higher `REPEATS` whether F2 stays this stable.
-- Even with the package installed, neither fixture got above 4/6 in any repeat. The skill measurably helps (vs 0/6 baseline), but doesn't drive the haiku-tier agent to a full pass. This is healthy headroom — the eval is not saturating — but suggests two or three of the six checks on each fixture are out of haiku's reach in a single turn.
-- Wall-clock per fixture was small (F2 2m 0s, F7 2m 37s of promptfoo time with concurrency 4); the orchestrator's apply/revert and DS rollouts contribute meaningfully to the total — full run was ~7m 20s wall-clock.
+### Follow-ups
 
-### Known limitations carried forward
-
-- Per-check `pass-rate` from the judge's `checks[]` array is not surfaced in the aggregator. Promptfoo discards everything except the `reason` string from the judge response, so we recover only mean X/N from the reason text via regex. To get per-check rates we'd need a custom assertion that writes the judge JSON to a side file, or a promptfoo patch. Today we cannot tell which two checks the agent reliably fails on F2 — only that two of them do.
-- Rubric calibration is therefore inspected at aggregate granularity. No check was tuned in this run; tuning without per-check signal would be speculative.
-- `tokenUsage` and `cost` are reported per provider call, but the judge component's `cost` field is `0` on the agent-sdk path in our records (only the agent's cost is captured). Total cost numbers below are agent-only; judge cost is uncounted.
-
-### Cost / time
-
-- Total wall-clock: ~7m 20s (orchestrator start `00:43:08` → finish `00:50:28`, MSK).
-- Agent tokens: F2 17,908 total (286 prompt / 17,622 completion across 6 transcripts); F7 31,840 total (586 prompt / 31,254 completion). Grand total agent tokens: ~49.7k.
-- Per-fixture grand totals printed by promptfoo (include grading): F2 21,358 total tokens, F7 34,637 total tokens.
-- Estimated cost (promptfoo's `cost` field, agent calls only): F2 $0.34, F7 $0.67. Grand total agent-side: **~$1.01**. Judge cost not captured per the limitation above; rough Opus-4.7 estimate for the ~2.8k grading completion tokens across 12 calls is well under $1.
-- Concurrency: 4 (promptfoo default). One kind cluster, fixtures run sequentially.
-
-### Follow-ups (not in v1)
-
-- Capture per-check pass-rates by adding a custom assertion that side-writes the judge JSON, then teach `aggregate.sh` to emit a per-check table. Without this, rubric tuning remains aggregate-only.
-- Add the `logging-operator-troubleshoot` skill; reintroduce F4 once it exists (deferred from v1).
-- Add a second `(harness, model)` cell once OpenCode + local 7B is on the workstation. The eval surface is already isolated to `providers/*.yaml`, so this is a single-file change per cell.
-- Wire CI bootstrap (kind + helmfile) and a regression-gating threshold against baselines from this run. Suggested initial gate: with-pkg mean must stay ≥ 0.6 on each v1 fixture; delta must stay ≥ +0.5.
-- Investigate why F2 has zero variance at `REPEATS=3` — either feature or artefact, worth confirming at `REPEATS=5` once cost budget allows.
+- Capture per-check pass-rates via a custom assertion that side-writes the judge JSON, then teach `aggregate.sh` to emit a per-check table. Required before targeted rubric tuning is meaningful.
+- Add the `logging-operator-troubleshoot` skill. When it exists, swap F4's expected handling from `no-misroute` to a positive `area-correct` against the new skill, and drop the negative-case shape from §4.6.
+- Add a second `(harness, model)` cell once OpenCode + a local model is on the workstation. The locked surface is isolated to `providers/*.yaml`, so this is a single-file change per cell.
+- Wire CI bootstrap (kind + helmfile) and a regression-gating threshold. Suggested initial gate: with-pkg mean ≥ 0.6 and delta ≥ +0.5 on every fixture.
