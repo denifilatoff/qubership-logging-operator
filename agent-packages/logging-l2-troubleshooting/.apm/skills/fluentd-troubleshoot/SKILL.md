@@ -36,31 +36,25 @@ kubectl -n <ns> get cm logging-fluentd -o yaml
 
 [references/symptoms.md](references/symptoms.md) — match against it; add patterns via `docs/troubleshooting/fluentd.md` in the operator repo first.
 
-## Zone signal classification (refute contract)
+## Lookup and output
 
-Walk the four classes in order. Emit on the first match.
+1. Take the diagnostic-pass output above.
+2. For each entry in [references/symptoms.md](references/symptoms.md), evaluate its `match` block against the diagnostic-pass output. Collect every entry that matches.
+3. Emit the result in the schema from [references/shared-contract.md](references/shared-contract.md#expert-output-schema):
 
-**1. CLEAN**
-- DaemonSet pods `Running`, no worker `SIGKILL` / `OOMKilled`.
-- `kubectl logs --tail=500` clean of FluentD errors (no flush failures, no plugin panics, no reloader-driven restarts).
-- Output stanzas in `logging-fluentd` ConfigMap configured to a reachable endpoint.
+```yaml
+findings:
+  - symptom_id: <id of the matched entry>
+    evidence: |
+      <verbatim lines / values referenced by the entry's evidence_template>
+    proposed_fix: |
+      <proposed_fix from the entry, instantiated with any concrete values>
+raw_diagnostic_pass: |
+  <abbreviated digest of the diagnostic-pass output above>
+```
 
-→ `hypothesis_refuted`, `signal_class: clean`.
+If the matched entry's `proposed_fix` warrants a structured operator action, also emit a `recommend` block per the shared contract, citing the matched `symptom_id` in `why`.
 
-**2. QUOTED**
-- Flush or output errors name a destination: `failed to flush ... Connection refused to <host>`, `Data too big`, `more than 128 chunks`, or any output-plugin error citing a hostname / endpoint / GELF protocol limit.
+## Anti-fabrication
 
-→ `hypothesis_refuted`, `signal_class: secondary_quoted`. Capture verbatim in `cited_external_components`.
-
-**3. BACKPRESSURE** — all of:
-- Flush retries climbing OR sustained DiskIO read load from buffer rewinds.
-- Output endpoint (Graylog or aggregator) responds to probes.
-- No FluentD-side error explains the flush failure (no parser bug, no plugin crash in `--tail=500`).
-
-→ `hypothesis_refuted`, `signal_class: secondary_backpressure`.
-
-**4. PRIMARY** (emit `recommend`):
-- ConfigMap parse error (`unmatched end tag`, config validation failure) → reloader-driven restart.
-- Plugin panic unrelated to flush.
-- Worker `OOMKilled` / `SIGKILL` with memory limit at the **~1Gi trap value** — this is the canonical FluentD memory-limit misconfig (hardcoded ~1Gi buffer cannot fit). Fix is to raise the limit or shrink the buffer; emit `recommend`, do not refute. (The buffer overflowing the 1Gi limit is a sizing trap, not downstream backpressure — backpressure would surface as flush retries per step 3.)
-- Worker exit with any other internal reason.
+If no entry in the catalogue matches, return `findings: []` with a non-empty `raw_diagnostic_pass` digest. Do not invent a `symptom_id`. Do not infer or speculate. Do not emit a `recommend`. An empty `findings` array is a valid and expected outcome — the orchestrator handles routing from there.
