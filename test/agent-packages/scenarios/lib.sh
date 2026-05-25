@@ -5,9 +5,9 @@
 set -euo pipefail
 
 # Resolve repo paths regardless of caller cwd.
-FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KIND_DIR="$(cd "$FIXTURES_DIR/.." && pwd)"
-STATE_DIR="$FIXTURES_DIR/.state"
+SCENARIOS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KIND_DIR="$(cd "$SCENARIOS_DIR/../../../deploy/kind" && pwd)"
+STATE_DIR="$SCENARIOS_DIR/.state"
 mkdir -p "$STATE_DIR"
 
 # Load .env from deploy/kind/.env — same file helmfile uses.
