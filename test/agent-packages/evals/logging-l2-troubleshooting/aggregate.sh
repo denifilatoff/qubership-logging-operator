@@ -142,9 +142,115 @@ mean_fmt() {
   done
 
   echo
-  echo "## Tokens and cost"
+  echo "## Cost per fixture (USD)"
   echo
-  echo "See per-fixture JSON (\`results/$run_id/*.json\`) or the promptfoo HTML report if generated."
+  echo "Per-fixture cost summed across all repeats per branch. \`costUSD\` is"
+  echo "promptfoo's own per-call computation from model token rates (includes"
+  echo "cached-input pricing). Agent cost is the troubleshooting session; judge"
+  echo "cost is the llm-rubric evaluation."
+  echo
+  echo "| Fixture | with-pkg agent | with-pkg judge | no-pkg agent | no-pkg judge | row total |"
+  echo "|---|---|---|---|---|---|"
+
+  # Sum costUSD across all modelUsage entries for the given provider label.
+  branch_cost_agent() {
+    jq -r --arg L "$1" '
+      [.results.results[]?
+       | select(.provider.label==$L)
+       | .response.metadata.modelUsage // {}
+       | to_entries[]?
+       | .value.costUSD // 0
+      ] | add // 0
+    ' "$2"
+  }
+  branch_cost_judge() {
+    jq -r --arg L "$1" '
+      [.results.results[]?
+       | select(.provider.label==$L)
+       | .gradingResult.componentResults[]?
+       | select(.assertion.type=="llm-rubric")
+       | .metadata.modelUsage // {}
+       | to_entries[]?
+       | .value.costUSD // 0
+      ] | add // 0
+    ' "$2"
+  }
+  branch_turns_sum() {
+    jq -r --arg L "$1" '
+      [.results.results[]?
+       | select(.provider.label==$L)
+       | .response.metadata.numTurns // 0
+      ] | add // 0
+    ' "$2"
+  }
+  branch_count() {
+    jq -r --arg L "$1" '
+      [.results.results[]? | select(.provider.label==$L)] | length
+    ' "$2"
+  }
+
+  total_cost="0"
+  total_score="0"
+  total_runs=0
+  for f in "$run_dir"/*.json; do
+    [ -e "$f" ] || continue
+    fix="$(basename "$f" .json)"
+    if jq -e '.error == "apply-failed"' "$f" >/dev/null 2>&1; then
+      echo "| $fix | (apply-failed) | - | (apply-failed) | - | - |"
+      continue
+    fi
+    wa=$(branch_cost_agent "with-pkg" "$f")
+    wj=$(branch_cost_judge "with-pkg" "$f")
+    na=$(branch_cost_agent "no-pkg"   "$f")
+    nj=$(branch_cost_judge "no-pkg"   "$f")
+    row=$(python3 -c "print(f'{$wa+$wj+$na+$nj:.4f}')")
+    total_cost=$(python3 -c "print(f'{$total_cost+$wa+$wj+$na+$nj:.4f}')")
+
+    score_sum=$(jq '[.results.results[]?.score // 0] | add // 0' "$f")
+    run_count=$(jq '[.results.results[]?.score] | length' "$f")
+    total_score=$(python3 -c "print($total_score + $score_sum)")
+    total_runs=$((total_runs + run_count))
+
+    printf '| %s | $%.4f | $%.4f | $%.4f | $%.4f | $%.4f |\n' \
+      "$fix" "$wa" "$wj" "$na" "$nj" "$row"
+  done
+
+  echo
+  printf '**Total cost across all fixtures: $%s** (across %d runs)\n' \
+    "$total_cost" "$total_runs"
+  if [ "$total_runs" -gt 0 ]; then
+    mean_score=$(python3 -c "print(f'{$total_score/$total_runs:.3f}')")
+    cost_per_score=$(python3 -c "print(f'{$total_cost / max($total_score, 0.001):.4f}')")
+    echo
+    echo "Mean score per run: $mean_score. Cost per score-unit (lower is better): \$$cost_per_score."
+    echo "Score-unit = one fully-passed run; partial-pass runs contribute their fractional score."
+  fi
+
+  echo
+  echo "## Chain efficiency (mean turns per case)"
+  echo
+  echo "\`numTurns\` is the agent-side session length (one turn = one assistant"
+  echo "message). Shorter means faster convergence; a chain that loops on refute"
+  echo "or revisits zones inflates this number."
+  echo
+  echo "| Fixture | with-pkg mean turns | no-pkg mean turns |"
+  echo "|---|---|---|"
+
+  for f in "$run_dir"/*.json; do
+    [ -e "$f" ] || continue
+    fix="$(basename "$f" .json)"
+    if jq -e '.error == "apply-failed"' "$f" >/dev/null 2>&1; then
+      echo "| $fix | (apply-failed) | (apply-failed) |"
+      continue
+    fi
+    wt=$(branch_turns_sum "with-pkg" "$f")
+    nt=$(branch_turns_sum "no-pkg"   "$f")
+    nw=$(branch_count     "with-pkg" "$f")
+    nn=$(branch_count     "no-pkg"   "$f")
+    wm=$(python3 -c "n=$nw; print(f'{$wt/n:.1f}' if n else 'n/a')")
+    nm=$(python3 -c "n=$nn; print(f'{$nt/n:.1f}' if n else 'n/a')")
+    echo "| $fix | $wm | $nm |"
+  done
 } > "$out"
 
 echo "wrote $out"
