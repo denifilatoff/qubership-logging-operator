@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Common helpers for fixture apply/revert scripts.
-# Sourced by fixture.sh and individual apply.sh/revert.sh.
+# Common helpers for scenario apply/revert scripts.
+# Sourced by fixture.sh and individual scenario apply.sh/revert.sh.
 
 set -euo pipefail
 
 # Resolve repo paths regardless of caller cwd.
 SCENARIOS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Hop: scenarios/ → agent-packages/ → test/ → repo root → deploy/kind
 KIND_DIR="$(cd "$SCENARIOS_DIR/../../../deploy/kind" && pwd)"
 STATE_DIR="$SCENARIOS_DIR/.state"
 mkdir -p "$STATE_DIR"
