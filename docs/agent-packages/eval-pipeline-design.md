@@ -1,6 +1,6 @@
 # Skill Eval Pipeline Design — L2
 
-**Status:** 2026-05-23. Design of the automated e2e eval pipeline for skills in this package, satisfying the constraints stated in `agent-packages/logging-l1-triage/docs/skill-evaluation-methodology.md` and the framework choice in `agent-packages/logging-l1-triage/docs/eval-framework-survey.md`.
+**Status:** 2026-05-23. Design of the automated e2e eval pipeline for skills in this package, satisfying the constraints stated in [skill-evaluation-methodology.md](skill-evaluation-methodology.md) and the framework choice in [eval-framework-survey.md](eval-framework-survey.md).
 
 This document is scoped to **L2 only** (e2e against a live kind cluster). L1 (ticket classification) needs a labelled corpus first and is out of scope.
 
@@ -25,9 +25,9 @@ The pipeline produces, per fixture, a `(with-package, no-package)` pass-rate del
 | A/B mechanism | APM package installed vs not installed (real `apm install --target claude` into a fresh workdir), not "SKILL.md present vs absent" |
 | Matrix | `(claude-agent-sdk, claude-haiku-4-5)` |
 | Judge | `(claude-agent-sdk, claude-opus-4-7)`, routed via the user's Claude Code subscription (no API key) |
-| Layout | `agent-packages/logging-l2-troubleshooting/evals/` (per-package, self-contained) |
-| Cluster fixtures | Stay in `deploy/kind/fixtures/`, linked from eval fixtures by ID |
-| Fixtures | `F1-fluentbit-config-syntax`, `F2-fluentbit-oom`, `F3-opensearch-readonly`, `F4-helm-bad-image` (negative-case), `F5b-fluentbit-cpu-throttle`, `F7-gelf-input-size` |
+| Layout | `test/agent-packages/evals/logging-l2-troubleshooting/` (per-package, self-contained) |
+| Cluster fixtures | Stay in `test/agent-packages/scenarios/`, linked from eval cases by ID |
+| Fixtures | `fluentbit-config-syntax`, `fluentbit-oom`, `opensearch-flood-stage-readonly`, `operator-helm-bad-image` (negative-case), `fluentbit-cpu-throttle`, `graylog-gelf-input-size-too-small` |
 | Prompt language | English. Engineer-driven prompts are written in English regardless of the source ticket language. |
 | Variance | `--repeat 3` by default, overridable |
 | CI | Local-only; CI wiring is a follow-up |
@@ -42,34 +42,45 @@ The pipeline produces, per fixture, a `(with-package, no-package)` pass-rate del
 agent-packages/logging-l2-troubleshooting/
 ├── apm.yml
 ├── README.md
-├── docs/
-│   └── eval-pipeline-design.md          # this document
-├── .apm/                                # the package itself (skills, shared)
+└── .apm/                                # the package itself (skills, shared)
+
+docs/agent-packages/
+└── eval-pipeline-design.md              # this document
+
+test/agent-packages/
+├── scenarios/                           # cluster-side artefacts (apply.sh, revert.sh, values-patch.yaml)
+│   ├── fluentbit-config-syntax/
+│   ├── fluentbit-oom/
+│   ├── opensearch-flood-stage-readonly/
+│   ├── operator-helm-bad-image/
+│   ├── fluentbit-cpu-throttle/
+│   └── graylog-gelf-input-size-too-small/
 └── evals/
-    ├── Makefile                         # entry point: make eval, make eval-F2
-    ├── promptfooconfig.yaml             # providers, assertions
-    ├── orchestrator.sh                  # per-fixture apply → eval → revert
-    ├── prep-workdir.sh                  # apm install into a fresh dir per variant
-    ├── judge-prompt.txt                 # rubric template for llm-rubric (.txt because promptfoo's processFileReference rejects .md)
-    ├── aggregate.sh                     # results JSON → summary.md
-    ├── providers/
-    │   ├── agent.yaml                   # claude-agent-sdk + haiku-4.5
-    │   └── judge.yaml                   # claude-agent-sdk + opus-4-7, no tools
-    ├── fixtures/
-    │   ├── F1-fluentbit-config-syntax/
-    │   │   ├── meta.yaml
-    │   │   ├── prompt.txt
-    │   │   ├── ground_truth.md
-    │   │   └── rubric.yaml
-    │   ├── F2-fluentbit-oom/             # (same four files)
-    │   ├── F3-opensearch-readonly/
-    │   ├── F4-helm-bad-image/            # negative-case (see §4.6)
-    │   ├── F5b-fluentbit-cpu-throttle/
-    │   └── F7-gelf-input-size/
-    └── results/                         # gitignored; promptfoo + aggregated reports
+    └── logging-l2-troubleshooting/
+        ├── Makefile                     # entry point: make eval, make eval-<case>
+        ├── promptfooconfig.yaml         # providers, assertions
+        ├── orchestrator.sh              # per-case apply → eval → revert
+        ├── prep-workdir.sh              # apm install into a fresh dir per variant
+        ├── judge-prompt.txt             # rubric template for llm-rubric (.txt because promptfoo's processFileReference rejects .md)
+        ├── aggregate.sh                 # results JSON → summary.md
+        ├── providers/
+        │   ├── agent.yaml               # claude-agent-sdk + haiku-4.5
+        │   └── judge.yaml               # claude-agent-sdk + opus-4-7, no tools
+        ├── cases/
+        │   ├── fluentbit-config-syntax/
+        │   │   ├── meta.yaml
+        │   │   ├── prompt.txt
+        │   │   ├── ground_truth.md
+        │   │   └── rubric.yaml
+        │   ├── fluentbit-oom/                       # (same four files)
+        │   ├── opensearch-flood-stage-readonly/
+        │   ├── operator-helm-bad-image/             # negative-case (see §4.6)
+        │   ├── fluentbit-cpu-throttle/
+        │   └── graylog-gelf-input-size-too-small/
+        └── results/                                 # gitignored; promptfoo + aggregated reports
 ```
 
-Cluster-side artefacts stay in `deploy/kind/fixtures/<id>/` (apply.sh, revert.sh, values-patch.yaml). Eval fixtures reference them by ID through `meta.yaml.cluster_fixture`. The asymmetry is deliberate: cluster fixtures belong to the deploy layer (helmfile, kind), eval fixtures belong to the skill package.
+Cluster-side artefacts live in `test/agent-packages/scenarios/<id>/` (apply.sh, revert.sh, values-patch.yaml). Eval cases reference them by sharing the same `<id>` directory name. The split is deliberate: scenarios are reusable cluster fault injectors (also driveable by hand), eval cases are the harness wiring (prompt, rubric, ground truth) for one skill package.
 
 ### 3.2. Data flow of one fixture run
 
@@ -77,16 +88,16 @@ Cluster-side artefacts stay in `deploy/kind/fixtures/<id>/` (apply.sh, revert.sh
 make eval
   └─ orchestrator.sh
        run_id=$(date +%Y%m%dT%H%M%S)
-       for fix in fixtures/F*-*/:
-         workdir_with=$(prep-workdir.sh "$fix" with-pkg "$run_id")  # apm install here
-         workdir_no=$(prep-workdir.sh   "$fix" no-pkg   "$run_id")  # empty dir
-         deploy/kind/fixtures/fixture.sh apply "${meta.cluster_fixture}"
+       for case in cases/*/:
+         workdir_with=$(prep-workdir.sh "$case" with-pkg "$run_id")  # apm install here
+         workdir_no=$(prep-workdir.sh   "$case" no-pkg   "$run_id")  # empty dir
+         test/agent-packages/scenarios/fixture.sh apply "${meta.id}"
          promptfoo eval \
-             --config evals/promptfooconfig.yaml \
-             --vars fixture=$fix,workdir_with=...,workdir_no=... \
+             --config promptfooconfig.yaml \
+             --vars case=$case,workdir_with=...,workdir_no=... \
              --repeat 3 \
-             --output results/$run_id/$fix.json
-         deploy/kind/fixtures/fixture.sh revert "${meta.cluster_fixture}"
+             --output results/$run_id/$case.json
+         test/agent-packages/scenarios/fixture.sh revert "${meta.id}"
        aggregate → results/$run_id/summary.md
 ```
 
@@ -102,7 +113,7 @@ testCase × variant(with-pkg | no-pkg) × repeat 3
  └─ assertions:
       ├─ llm-rubric (provider = judge)              # binary checks from rubric.yaml
       ├─ skill-used: logging-l2-triage              # promptfoo-native
-      ├─ skill-used: <expected_area>                # from meta.yaml; dropped when expected_area=none (F4)
+      ├─ skill-used: <expected_area>                # from meta.yaml; dropped when expected_area=none (operator-helm-bad-image)
       └─ token / latency captured automatically
 ```
 
@@ -127,12 +138,12 @@ prep-workdir.sh <fixture-id> <variant> <run-id>
 Consequences:
 
 - The eval tests the same surface a real user sees — `apm install … --target claude`. If install ever silently breaks the package's deployment to Claude Code, the eval catches it.
-- No stale snapshots of skills checked into `fixtures/*/`. The package itself is the source of truth; the next eval run picks up its current state.
+- No stale snapshots of skills checked into `cases/*/`. The package itself is the source of truth; the next eval run picks up its current state.
 - Workdirs under `$XDG_CACHE_HOME/qubership-logging-l2-evals/<run-id>/` (default `~/.cache/...`) are ephemeral. They live **outside** the source package because `apm install` does a recursive copy of the source — placing the workdir inside the package would copy the workdir into itself until the filesystem hits `ENAMETOOLONG`. `make clean` wipes the cache root.
 
 ### 3.4. Cluster lifecycle
 
-`deploy/kind/fixtures/fixture.sh` is unchanged. Its "one fixture active at a time" policy is honoured by the orchestrator's outer serial loop — promptfoo only ever sees a cluster in a single defined state.
+`test/agent-packages/scenarios/fixture.sh` is unchanged. Its "one scenario active at a time" policy is honoured by the orchestrator's outer serial loop — promptfoo only ever sees a cluster in a single defined state.
 
 Cluster baseline (kind cluster + helmfile baseline per the chosen `BACKEND`) is a **precondition**, not the pipeline's responsibility. The engineer runs the baseline once per session. Before starting, the orchestrator calls `fixture.sh status` and refuses to run if any fixture is already active — a clean baseline state is required so that the first `apply` lands on top of a known surface. Validating that kind + helmfile baseline themselves are healthy is left to the engineer (and, later, to CI).
 
@@ -155,11 +166,10 @@ The judge is never the same model as the agent — methodology §4 leakage const
 
 ### 4.1. `meta.yaml`
 
-Minimum to link an eval fixture to a cluster fixture and describe the expected outcome.
+Minimum to link an eval case to a cluster scenario and describe the expected outcome. The case directory and scenario directory share the same `id` — no separate `cluster_fixture` field.
 
 ```yaml
-id: F2-fluentbit-oom
-cluster_fixture: F2-fluent-oom           # folder name in deploy/kind/fixtures/
+id: fluentbit-oom                        # also the folder name in test/agent-packages/scenarios/
 backend: victorialogs                    # BACKEND env for helmfile baseline
 expected_area: fluentbit-troubleshoot    # which area-skill triage should select
 expected_recommend_kind: resource-bump   # high-level shape of recommend
@@ -202,12 +212,12 @@ Parameterised by `{{ground_truth}}`, `{{rubric_yaml}}`, `{{transcript}}`. Return
 
 ### 4.6. Negative-case fixtures
 
-A fixture whose natural target area lies outside this package is encoded as a negative case. The current example is `F4-helm-bad-image`: the symptom belongs to `logging-operator-troubleshoot`, which is listed under "Areas not covered yet" in the L2 triage signal table. The expected behaviour is for triage to **hand back to the engineer with the observation and stop**, not to route into a nearby area-skill as a substitute.
+A case whose natural target area lies outside this package is encoded as a negative case. The current example is `operator-helm-bad-image`: the symptom belongs to `logging-operator-troubleshoot`, which is listed under "Areas not covered yet" in the L2 triage signal table. The expected behaviour is for triage to **hand back to the engineer with the observation and stop**, not to route into a nearby area-skill as a substitute.
 
 Shape:
 
 - `meta.yaml` sets `expected_area: none`. The rendered promptfoo config drops the second `skill-used` assertion when this value is `none`; `skill-used: logging-l2-triage` still applies.
-- `rubric.yaml` replaces the positive `area-correct` check with an inverted `no-misroute` check (pass if no area-specific skill was invoked after triage), and replaces `<symptom>-identified` with a check anchored to the negative case's smoking gun (e.g. `operator-image-pull-identified` for F4).
+- `rubric.yaml` replaces the positive `area-correct` check with an inverted `no-misroute` check (pass if no area-specific skill was invoked after triage), and replaces `<symptom>-identified` with a check anchored to the negative case's smoking gun (e.g. `operator-image-pull-identified` for `operator-helm-bad-image`).
 - `ground_truth.md` carries a "Negative criteria" section listing the skills and recommends the agent must NOT produce. The judge anchors the negative checks to that section.
 
 ---
@@ -251,7 +261,7 @@ The orchestrator adds, on top:
 For cross-run browsing (any historical eval, sortable / filterable), use the local promptfoo viewer:
 
 ```bash
-cd agent-packages/logging-l2-troubleshooting/evals
+cd test/agent-packages/evals/logging-l2-troubleshooting
 npx promptfoo@latest view   # serves http://localhost:15500, reads ~/.promptfoo/promptfoo.db
 ```
 
@@ -298,20 +308,20 @@ Matrix: `(claude-agent-sdk, claude-haiku-4-5)` agent, `(claude-agent-sdk, claude
 
 | Fixture | with-pkg | no-pkg | delta | with-pkg mean X/N | triage-ran (with / no) |
 |---|---|---|---|---|---|
-| F1-fluentbit-config-syntax | 0.83 | 0.03 | +0.80 | 4.0/6 | 3/3 vs 0/3 |
-| F2-fluentbit-oom           | 0.83 | 0.00 | +0.83 | 4.0/6 | 3/3 vs 0/3 |
-| F3-opensearch-readonly     | 0.69 | 0.03 | +0.66 | 2.3/6 | 3/3 vs 0/3 |
-| F4-helm-bad-image          | 0.94 | 0.11 | +0.83 | 5.3/6 | 3/3 vs 0/3 |
-| F5b-fluentbit-cpu-throttle | 0.75 | 0.08 | +0.67 | 3.0/6 | 3/3 vs 0/3 |
-| F7-gelf-input-size         | 0.75 | 0.00 | +0.75 | 3.0/6 | 3/3 vs 0/3 |
+| fluentbit-config-syntax            | 0.83 | 0.03 | +0.80 | 4.0/6 | 3/3 vs 0/3 |
+| fluentbit-oom                      | 0.83 | 0.00 | +0.83 | 4.0/6 | 3/3 vs 0/3 |
+| opensearch-flood-stage-readonly    | 0.69 | 0.03 | +0.66 | 2.3/6 | 3/3 vs 0/3 |
+| operator-helm-bad-image            | 0.94 | 0.11 | +0.83 | 5.3/6 | 3/3 vs 0/3 |
+| fluentbit-cpu-throttle             | 0.75 | 0.08 | +0.67 | 3.0/6 | 3/3 vs 0/3 |
+| graylog-gelf-input-size-too-small  | 0.75 | 0.00 | +0.75 | 3.0/6 | 3/3 vs 0/3 |
 
 Notes:
 
 - Every fixture shows a clear positive delta; with-pkg always beats no-pkg, on every repeat, on every fixture.
 - `skill-used: logging-l2-triage` fires deterministically per branch. No-pkg invariably falls back to `superpowers:systematic-debugging`.
-- F4 (negative-case) earns the highest with-pkg score — the package keeps triage from misrouting into a covered area-skill.
-- F3 has the largest gap to full pass (2.3/6 with-pkg). The OpenSearch path requires combining `_cluster/settings` evidence with per-index `read_only_allow_delete` evidence; missing either drops two checks. Worth targeted rubric or skill-content review.
-- The eval is not saturating at haiku-tier — headroom remains on every fixture except F4, which is by design coarse (hand-back is binary).
+- `operator-helm-bad-image` (negative-case) earns the highest with-pkg score — the package keeps triage from misrouting into a covered area-skill.
+- `opensearch-flood-stage-readonly` has the largest gap to full pass (2.3/6 with-pkg). The OpenSearch path requires combining `_cluster/settings` evidence with per-index `read_only_allow_delete` evidence; missing either drops two checks. Worth targeted rubric or skill-content review.
+- The eval is not saturating at haiku-tier — headroom remains on every case except `operator-helm-bad-image`, which is by design coarse (hand-back is binary).
 
 ### Known limitations
 
@@ -321,6 +331,6 @@ Notes:
 ### Follow-ups
 
 - Capture per-check pass-rates via a custom assertion that side-writes the judge JSON, then teach `aggregate.sh` to emit a per-check table. Required before targeted rubric tuning is meaningful.
-- Add the `logging-operator-troubleshoot` skill. When it exists, swap F4's expected handling from `no-misroute` to a positive `area-correct` against the new skill, and drop the negative-case shape from §4.6.
+- Add the `logging-operator-troubleshoot` skill. When it exists, swap `operator-helm-bad-image`'s expected handling from `no-misroute` to a positive `area-correct` against the new skill, and drop the negative-case shape from §4.6.
 - Add a second `(harness, model)` cell once OpenCode + a local model is on the workstation. The locked surface is isolated to `providers/*.yaml`, so this is a single-file change per cell.
 - Wire CI bootstrap (kind + helmfile) and a regression-gating threshold. Suggested initial gate: with-pkg mean ≥ 0.6 and delta ≥ +0.5 on every fixture.
