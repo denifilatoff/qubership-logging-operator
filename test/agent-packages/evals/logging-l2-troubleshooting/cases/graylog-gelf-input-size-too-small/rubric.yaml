@@ -4,10 +4,13 @@ checks:
       Agent invoked logging-l2-triage before any area-specific skill.
   - id: area-correct
     description: >
-      Triage selected graylog-server-troubleshoot, not fluentbit /
-      fluentd / opensearch. Because this is partial loss by message
-      size (not a collector failure), the agent should land on
-      graylog-server — the drop happens on the Graylog input side.
+      The chain of area-skill invocations ended at
+      graylog-server-troubleshoot and that skill confirmed the cause.
+      Earlier hops in the chain (if any) are acceptable as long as each
+      one either confirmed-and-stopped or refuted before the next was
+      invoked — grade the final converging skill, not the first pick.
+      A run that ends in fluentbit / fluentd / opensearch does not
+      satisfy the check, regardless of how it got there.
   - id: size-correlation-identified
     description: >
       Transcript explicitly correlates the loss with message size

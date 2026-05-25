@@ -1,5 +1,5 @@
 ---
-name: troubleshoot-fluentd
+name: fluentd-troubleshoot
 description: Diagnose FluentD problems in the Qubership logging stack — worker OOM kills, sustained DiskIO read load, GELF UDP "data too big / 128 chunks" buffer flush failures, ConfigMap-reloader-driven restarts. Use when symptoms point at the FluentD DaemonSet. Read-only against the live cluster; mutations go out as `recommend` blocks, never executed.
 ---
 
@@ -42,4 +42,14 @@ Whatever you actually observe becomes the `evidence` field on any `recommend` yo
 
 Match the report against [references/symptoms.md](references/symptoms.md). That file is the canonical catalogue; do not paraphrase it back into this SKILL.
 
-If the symptom is not in the catalogue, do **not** invent a solution. Report what you observed, suggest the adjacent area (FluentBit upstream, Graylog GELF input, OpenSearch backpressure), and stop. Adding new patterns means editing `docs/troubleshooting/fluentd.md` in the operator repo first.
+Adding new patterns means editing `docs/troubleshooting/fluentd.md` in the operator repo first; do not invent a solution to retrofit into this skill.
+
+## Zone definition (for the refute contract)
+
+See the [Hypothesis refute](references/shared-contract.md#hypothesis-refute) section in the shared contract for the output shape and triage semantics. The FluentD zone is **clean** — and you must refute rather than recommend — when all of these hold:
+
+- DaemonSet pods are `Running`, no worker SIGKILL / OOMKilled in `describe` or logs.
+- `kubectl logs --tail=500` has no FluentD-side errors (flush failures, `Data too big`, `more than 128 chunks`, plugin panics).
+- Memory limit is not the trap value (workload fits the configured `~1Gi` buffer comfortably).
+- ConfigMap-reloader-driven restarts aren't happening.
+- Any quoted downstream error in FluentD logs (e.g. an OpenSearch backpressure / shard-rejection message) names another area as the actual owner — set `likely_downstream_area` accordingly.

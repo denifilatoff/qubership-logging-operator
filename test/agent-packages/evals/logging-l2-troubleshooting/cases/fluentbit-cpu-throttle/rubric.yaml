@@ -4,10 +4,13 @@ checks:
       Agent invoked logging-l2-triage before any area-specific skill.
   - id: area-correct
     description: >
-      Triage selected fluentbit-troubleshoot, not fluentd / graylog /
-      opensearch / graylog-disk-usage. The symptom — pods healthy
-      but no messages reaching Graylog — routes to fluent-bit, with
-      Graylog ruled out because nothing arrives at the input.
+      The chain of area-skill invocations ended at fluentbit-troubleshoot
+      and that skill confirmed the cause. Earlier hops in the chain (if
+      any) are acceptable as long as each one either confirmed-and-stopped
+      or refuted before the next was invoked — grade the final converging
+      skill, not the first pick. A run that ends in fluentd /
+      graylog-server / opensearch / graylog-disk-usage does not satisfy
+      the check, regardless of how it got there.
   - id: cpu-throttle-identified
     description: >
       Transcript names CPU throttling (or, equivalently, an undersized

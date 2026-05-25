@@ -4,10 +4,13 @@ checks:
       Agent invoked logging-l2-triage before any area-specific skill.
   - id: area-correct
     description: >
-      Triage selected opensearch-troubleshoot, not fluentbit / fluentd /
-      graylog-server / graylog-disk-usage. The smoking gun is on the
-      OpenSearch side (index blocks + cluster settings), even though
-      the symptom surfaces in Graylog.
+      The chain of area-skill invocations ended at opensearch-troubleshoot
+      and that skill confirmed the cause. Earlier hops in the chain (if
+      any) are acceptable as long as each one either confirmed-and-stopped
+      or refuted before the next was invoked — grade the final converging
+      skill, not the first pick. A run that ends in fluentbit / fluentd /
+      graylog-server / graylog-disk-usage does not satisfy the check,
+      regardless of how it got there.
   - id: readonly-block-identified
     description: >
       Transcript explicitly names the read-only state on the affected

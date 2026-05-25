@@ -1,5 +1,5 @@
 ---
-name: troubleshoot-graylog-server
+name: graylog-server-troubleshoot
 description: Diagnose Graylog server problems in the Qubership logging stack — UI inaccessible / 504, browser-to-Graylog connection issues, ingress/route cyclic redirect, container OOM, low performance and journal growth, "Graylog not processing messages", oversized indices, negative unprocessed messages, incorrect timestamps, OpenSearch nodes info unavailable, widget errors on text fields, "Deflector exists as an index" errors. Use when symptoms point at Graylog itself (server, web UI, journal, indexer alias), not at OpenSearch storage or the FluentBit/FluentD collectors. Read-only against the live system; mutations go out as `recommend` blocks, never executed.
 ---
 
@@ -17,27 +17,23 @@ Read [references/shared-contract.md](references/shared-contract.md) first. `read
 
 Graylog-specific notes:
 
-- Deployment shape varies: VM-with-Docker (`docker ps`, `/srv/docker/graylog/*`, `service docker stop`) **or** Kubernetes (`kubectl -n logging get sts,deploy`). The same symptom needs different commands. Confirm which one you're on before reading state.
-- Restarting Graylog containers, deleting journal directories, stopping inputs from the UI, and patching `graylog.conf` are all mutating. Emit as `recommend` with rollback.
+- This skill targets a Kubernetes deployment. VM-deployed Graylog (Docker-on-VM, SSH access, `/srv/docker/graylog/*`) is out of scope for diagnosis — per the methodology's K8s-only invariant. The HTTP/REST API at `/api/...`, however, works regardless of where Graylog runs, and remains the primary diagnostic surface here.
+- If the engineer's environment turns out to be VM-deployed and the symptom needs pod / container introspection (`kubectl logs`, `kubectl exec`, container fs), say so and hand back. Do not extrapolate cluster state from the HTTP API alone.
+- Restarting the Graylog pod, deleting journal data, stopping inputs from the UI, and patching `graylog.conf` are all mutating. Emit as `recommend` with rollback.
 - API calls against `/api/system/indexer/indices` with `DELETE`, or any write to `/_settings`, are mutating.
 
 ## First read-safe sweep
 
 ```bash
-# --- VM deployment (Docker) ---
-ssh <graylog-vm>
-docker ps -f name=graylog                 # four containers expected: web, graylog, storage, mongo
-df -h                                     # HDD utilisation — relevant to many symptoms
-docker logs graylog_graylog_1 --tail=500 2>&1 | grep -iE 'error|warn|journal|deflector'
-docker stats --no-stream                  # CPU / RAM pressure
-
-# --- Kubernetes deployment ---
+# --- Kubernetes-side state ---
 kubectl -n <ns> get sts,deploy,svc -l app.kubernetes.io/name=graylog -o wide
 kubectl -n <ns> get pods -l app.kubernetes.io/name=graylog -o wide
 kubectl -n <ns> describe pod <graylog-pod>
 kubectl -n <ns> logs <graylog-pod> --tail=500 | grep -iE 'error|warn|journal|deflector'
+kubectl -n <ns> get pvc                   # backing volume for journal + node data
+kubectl -n <ns> describe pvc <graylog-pvc>
 
-# --- Common (works either way against the Graylog API) ---
+# --- Graylog HTTP API (works regardless of where Graylog runs) ---
 # Node and journal state. Journal size and "unprocessed messages" tell most of the story.
 curl -sk -u <u>:<p> https://<graylog>/api/system/journal
 curl -sk -u <u>:<p> https://<graylog>/api/system/cluster/nodes
@@ -54,8 +50,19 @@ Whatever you actually observe becomes the `evidence` field on any `recommend` yo
 
 Match the report against [references/symptoms.md](references/symptoms.md). Canonical catalogue, do not paraphrase.
 
-If the symptom is not in the catalogue, do **not** invent a solution. Report what you observed and stop. Adding new patterns means editing `docs/troubleshooting/graylog.md` first.
+Adding new patterns means editing `docs/troubleshooting/graylog.md` first; do not invent a solution to retrofit into this skill.
+
+## Zone definition (for the refute contract)
+
+See the [Hypothesis refute](references/shared-contract.md#hypothesis-refute) section in the shared contract for the output shape and triage semantics. The Graylog-server zone is **clean** — and you must refute rather than recommend — when all of these hold:
+
+- Server pods `Running`, no recent restarts / OOM, web UI reachable, no ingress/TLS errors.
+- Journal size is healthy and not growing; "unprocessed messages" is not climbing.
+- Inputs are `RUNNING` per `/api/system/inputstates`; no input-side drops attributable to Graylog config (e.g. `max_message_size` not the constraint for the symptom).
+- No deflector / alias / widget / fielddata errors in Graylog logs or UI.
+- OpenSearch nodes info reachable per `/api/system/cluster/nodes`, no TLS errors to OpenSearch.
+- If indexer logs quote a downstream area (OpenSearch read-only block, MongoDB connection refused), set `likely_downstream_area` to that area.
 
 ## Investigating disk pressure specifically
 
-If the symptom is "HDD full" / "Graylog VM running out of space" and the engineer wants to know **which producers are filling the disk** (not just "free space, restart"), that is a focused diagnostic procedure — call the `investigate-graylog-disk-usage` skill from this package. It exists exactly for that breakdown.
+If the symptom is "Graylog/OpenSearch storage running out of space" (PVC near full, node `DiskPressure=True`) and the engineer wants to know **which producers are filling the disk** (not just "free space, restart"), that is a focused diagnostic procedure — call the `graylog-disk-usage-investigate` skill from this package. It exists exactly for that breakdown.

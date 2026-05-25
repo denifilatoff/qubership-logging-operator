@@ -9,11 +9,11 @@ When the engineer is troubleshooting a problem in the Qubership logging stack ag
 
 Do this even when the area looks obvious from the engineer's description. `logging-l2-triage` runs a short read-safe sweep across the cluster and grounds the routing decision in what is actually true right now, not in the words of the complaint. It then hands off to one of:
 
-- `troubleshoot-graylog-server`
-- `troubleshoot-opensearch`
-- `troubleshoot-fluentd`
-- `troubleshoot-fluentbit`
-- `investigate-graylog-disk-usage`
+- `graylog-server-troubleshoot`
+- `opensearch-troubleshoot`
+- `fluentd-troubleshoot`
+- `fluentbit-troubleshoot`
+- `graylog-disk-usage-investigate`
 
 All skills in this package are read-only against live systems. Any state-changing fix is emitted as a structured `recommend` block per the shared protocol in `.apm/shared/shared-contract.md` — the operator decides whether and when to apply it.
 

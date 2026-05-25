@@ -1,5 +1,5 @@
 ---
-name: troubleshoot-fluentbit
+name: fluentbit-troubleshoot
 description: Diagnose FluentBit problems in the Qubership logging stack — connection failures to Graylog, stuck pipelines, dropped or delayed logs, ConfigMap reload failures. Use when symptoms point at the FluentBit DaemonSet (forwarder or aggregator). Read-only against the live cluster; mutations go out as `recommend` blocks, never executed.
 ---
 
@@ -41,4 +41,14 @@ Whatever you actually observe becomes the `evidence` field on any `recommend` yo
 
 Match the report against [references/symptoms.md](references/symptoms.md). That file is the canonical catalogue — patterns, root causes, fixes. Do not paraphrase it back into this SKILL; load it on demand and cite the section you used.
 
-If the symptom is not in the catalogue, do **not** invent a solution. Report what you observed, suggest the adjacent area that might own it (FluentD buffer, Graylog GELF input, network path), and stop. Adding new patterns means editing `docs/troubleshooting/fluentbit.md` in the operator repo first.
+Adding new patterns means editing `docs/troubleshooting/fluentbit.md` in the operator repo first; do not invent a solution to retrofit into this skill.
+
+## Zone definition (for the refute contract)
+
+See the [Hypothesis refute](references/shared-contract.md#hypothesis-refute) section in the shared contract for the output shape and triage semantics. The FluentBit zone is **clean** — and you must refute rather than recommend — when all of these hold:
+
+- DaemonSet/StatefulSet pods are `Running`, no `CrashLoopBackOff`, no recent OOMKilled / Evicted in `describe`.
+- `kubectl logs --tail=500` has no FluentBit-side errors (parser failures, ConfigMap reload failures, plugin init errors, internal panics).
+- Resource limits are not throttling the workload (CPU throttling stats clean, memory headroom).
+- The output endpoint (Graylog / FluentBit aggregator / etc.) is reachable from the pod.
+- Any quoted downstream error in FluentBit logs (e.g. an OpenSearch flood-stage message surfaced from Graylog) names another area as the actual owner — set `likely_downstream_area` accordingly.

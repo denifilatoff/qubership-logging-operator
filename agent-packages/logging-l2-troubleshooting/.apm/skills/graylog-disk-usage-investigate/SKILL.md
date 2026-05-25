@@ -1,13 +1,13 @@
 ---
-name: investigate-graylog-disk-usage
-description: Produce a ranked breakdown of who is filling Graylog/OpenSearch disk — which microservices, namespaces, containers, or hosts contributed the most bytes of logs over a chosen time window. Use when an engineer asks "what is eating our log storage", "which service is the noisiest producer", "why did the Graylog VM fill up again", or as a sub-routine called from `troubleshoot-graylog-server` after the HDD-full symptom is confirmed. Callable both standalone by the engineer and as a sub-step by another L2 skill. Read-only — produces a report, never deletes or rotates indices.
+name: graylog-disk-usage-investigate
+description: Produce a ranked breakdown of who is filling Graylog/OpenSearch disk — which microservices, namespaces, containers, or hosts contributed the most bytes of logs over a chosen time window. Use when an engineer asks "what is eating our log storage", "which service is the noisiest producer", "why did the log storage fill up again", or as a sub-routine called from `graylog-server-troubleshoot` after the disk-full symptom is confirmed. Callable both standalone by the engineer and as a sub-step by another L2 skill. Read-only — produces a report, never deletes or rotates indices.
 ---
 
 # Investigate Graylog disk usage
 
 Focused diagnostic procedure: **given a time window, list the producers contributing the most bytes of logs to Graylog/OpenSearch storage, ranked.** The output feeds a retention / quota / parser-fix decision — it does not make that decision.
 
-This is a narrow investigation skill, not a full knowledge area. It can be called standalone by the engineer ("rank producers by volume for the last 24h") or as a sub-step by `troubleshoot-graylog-server` after the "HDD Full" symptom is confirmed.
+This is a narrow investigation skill, not a full knowledge area. It can be called standalone by the engineer ("rank producers by volume for the last 24h") or as a sub-step by `graylog-server-troubleshoot` after the "HDD Full" symptom is confirmed.
 
 ## Protocol
 
@@ -22,7 +22,7 @@ The caller (engineer or another skill) must supply, or you must ask for:
 - **Grouping dimension** — which field to rank by. Typical candidates in this stack:
   - `container_name` — most precise on Kubernetes deployments.
   - `namespace_name` / `kubernetes_namespace_name` — coarser, often the right level for "which team is loud".
-  - `source` — host / node level. Useful on VM deployments.
+  - `source` — K8s node level. Useful when the question is "which node is being noisy".
   - `app_kubernetes_io_name` or `microservice` — application-level if present.
 - **Top-N** — how many producers to return (default 20).
 
@@ -106,10 +106,10 @@ notes:
 
 What you must **not** do:
 
-- Recommend deleting indices, dropping streams, lowering retention, or fixing a parser. Producing the ranked breakdown is the whole job; the decision is the operator's, in `troubleshoot-graylog-server` or in a retention review.
+- Recommend deleting indices, dropping streams, lowering retention, or fixing a parser. Producing the ranked breakdown is the whole job; the decision is the operator's, in `graylog-server-troubleshoot` or in a retention review.
 - Run the aggregation across "all indices, all time". Always cap.
 - Re-run the same query repeatedly during one investigation — cache the output in the report.
 
 ## Related
 
-- [references/symptoms.md](references/symptoms.md) — the canonical Graylog troubleshooting guide. The "HDD Full on Graylog VM" section is the context this skill usually slots into.
+- [references/symptoms.md](references/symptoms.md) — the canonical Graylog troubleshooting guide. The disk-full section is the context this skill usually slots into.

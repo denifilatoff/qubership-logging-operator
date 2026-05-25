@@ -4,8 +4,13 @@ checks:
       Agent invoked logging-l2-triage before any area-specific skill.
   - id: area-correct
     description: >
-      Triage selected fluentbit-troubleshoot, not fluentd / graylog /
-      opensearch / logging-operator.
+      The chain of area-skill invocations ended at fluentbit-troubleshoot
+      and that skill confirmed the cause. Earlier hops in the chain (if
+      any) are acceptable as long as each one either confirmed-and-stopped
+      or refuted before the next was invoked — grade the final converging
+      skill, not the first pick. A run that ends in fluentd /
+      graylog-server / opensearch / logging-operator does not satisfy
+      the check, regardless of how it got there.
   - id: oom-identified
     description: >
       Transcript names OOMKilled or "memory limit reached" backed by

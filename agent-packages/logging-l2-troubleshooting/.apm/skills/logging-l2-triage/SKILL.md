@@ -79,41 +79,59 @@ Endpoints in step 3–4: `<graylog>` and `<os-host>` resolve in-cluster (Service
 
 Capture each command's actual output — those strings are your `evidence` for the handoff.
 
-## Routing
+## Routing — build the ranked candidate list
 
-Match the observations against [references/signal-table.md](references/signal-table.md). That file has the symptom → target-skill mapping with priors. Do not paraphrase it back into this SKILL; load it on demand and cite the rows you matched.
+Match the observations against [references/signal-table.md](references/signal-table.md). That file has the symptom → target-skill mapping with priors, the downstream-error-in-upstream-log principle, and class-level fallback chains. Do not paraphrase it back into this SKILL; load it on demand and cite the rows or principles you matched.
 
-Decision rules (also in the signal table):
+The output of routing is always a **ranked list of candidates** (length ≥ 1), not a single pick. Build it in this order:
 
-- **One row fires** → that's the target skill. Invoke it (see "Final action" below).
-- **Multiple rows, same target** → still that target; case is over-determined, raise confidence.
-- **Multiple rows, different targets** → rank by `match strength × prior`. Primary = top; the rest are refutation successors to try if primary refutes.
-- **No row fires** after a complete sweep → emit a `recommend` for manual diagnosis with the full sweep attached, and stop. Do not route to "the closest skill".
-- **Sweep partially blocked** (RBAC, endpoint down) → escalate to the engineer; do not route blind.
+1. Rows from the seed table whose signals fired in the sweep, ranked by `match strength × prior`.
+2. Plus any area named by the downstream-error-in-upstream-log principle, even when the row-based probe wasn't run.
+3. If steps 1–2 yield nothing but the symptom matches a class in the fallback-chains table → use that chain verbatim.
+4. If still nothing → don't invent a target. Emit a `recommend` for manual diagnosis with the full sweep attached, and stop.
 
-## Final action — invoke the area skill
+A list of length 1 is the overdetermined case: confirm-or-recommend, no fallback.
 
-Your final tool call is `Skill({"skill": "<target>"})` for the primary target you picked. That loads the area skill's guidance into this same session — there is no separate agent and no return event. After the call, continue the conversation in your own voice, applying the area skill's protocol with the sweep evidence already in your context.
+## Chain of hypotheses
 
-**Do not end on a "handoff envelope" message.** Emitting a YAML envelope and stopping leaves the engineer with raw triage data and no diagnosis. The envelope below is an internal mental model — useful for organising what you carry into the next skill, never the final user-facing output.
+The candidate list is walked top-down by a single loop:
+
+```
+for candidate in ranked_list:
+    Skill({"skill": candidate})
+    if candidate confirmed the cause:
+        finish — emit recommend for that cause, stop
+    if candidate returned hypothesis_refuted:
+        continue to next candidate
+    if step budget exhausted:
+        break
+emit a recommend for manual diagnosis with the full audit trail, stop
+```
+
+Rules:
+
+- **Found the cause → stop.** As soon as any area skill produces a recommend backed by evidence of an actual root cause in its zone, the case is done. Do not walk the rest of the list "for completeness". Extra invocations cost a sweep each and risk noise.
+- **Refute → next.** A `hypothesis_refuted` outcome from the candidate (defined in each area SKILL's contract) is the only signal to advance the list. Treat all three of these as refute equivalents: the area skill explicitly emits `hypothesis_refuted`; its sweep is clean in its zone and it names a different area as the likely owner; it reaches a recommend whose evidence contradicts the routing signal.
+- **Step budget: 5 area-skill invocations per session.** Most chains converge in 1–2 hops; the budget is for cases where the symptom is genuinely ambiguous across the stack. After 5 refutes, the case is harder than the catalogue covers — escalate.
+- **Don't shop.** "Try the next skill just in case" is not the contract. Advance only on refute or budget exhaustion.
+
+Your tool call to advance the chain is `Skill({"skill": "<candidate>"})`. The area skill's guidance loads into this same session — there is no separate agent, no return event. After the call, continue in your own voice, applying that area skill's protocol with the sweep evidence already in your context.
+
+**Do not end on a "handoff envelope" message.** Emitting a YAML envelope and stopping leaves the engineer with raw triage data and no diagnosis. The envelope below is an internal mental model — useful for organising what you carry into each area skill, never the final user-facing output.
 
 ### Internal mental model (what to carry into the area skill)
 
 ```yaml
 triage_l2:
   input_shape: ticket | engineer
-  primary:
-    target_skill: fluentbit-troubleshoot | fluentd-troubleshoot | graylog-server-troubleshoot | opensearch-troubleshoot | graylog-disk-usage-investigate
-    signals_matched:
-      - row: <verbatim "Runtime signal observed" cell from signal-table.md>
-        evidence: |
-          <verbatim command output that matched, trimmed to the relevant lines>
-        prior: high | medium | low
-    confidence: high | medium | low
-  alternatives:           # refutation successors, ranked. Empty list if primary is unique.
-    - target_skill: ...
-      signals_matched: [...]
-      confidence: ...
+  candidates:             # ranked list, length ≥ 1. Walked top-down by the loop above.
+    - target_skill: fluentbit-troubleshoot | fluentd-troubleshoot | graylog-server-troubleshoot | opensearch-troubleshoot | graylog-disk-usage-investigate
+      signals_matched:
+        - row: <verbatim "Runtime signal observed" cell, OR "downstream-error: <quoted phrase>", OR "fallback-chain: <class>">
+          evidence: |
+            <verbatim command output or quoted log line, trimmed to the relevant lines>
+          prior: high | medium | low
+      confidence: high | medium | low
   sweep:                  # the read-safe snapshot — every command run, its output, abbreviated.
     - command: kubectl get pods -n logging
       output: |
@@ -121,21 +139,8 @@ triage_l2:
     - command: curl -sk -u .. https://<graylog>/api/system/journal
       output: |
         ...
-  notes:                  # anything the area skill needs to know — partial sweep,
-                          # unusual customisation observed, engineer's stated constraints.
+  notes:                  # partial sweep, unusual customisation observed, engineer constraints.
 ```
-
-## If the area skill refutes the hypothesis
-
-You stay in the same session, so there is no literal "return". Treat one of these as a refutation signal in the area skill's reasoning:
-
-- The area skill reaches a recommend block whose evidence contradicts the routing signals.
-- Its own read-safe sweep surfaces a different area's signals.
-- It explicitly states the symptom doesn't match its catalogue.
-
-When that happens: invoke the next-best target from `alternatives` via `Skill({"skill": "<next>"})`. If the alternatives list is empty, re-run a fresh match against the signal table with the additional evidence in hand and invoke the resulting skill.
-
-Step budget: **5 area-skill invocations per session**. If you've called five area skills without converging, emit a `recommend` for manual diagnosis with the full audit trail (sweep + every invoked skill's findings) and stop. Spinning is worse than admitting the case is harder than the table covers.
 
 ## What this skill does not do
 
