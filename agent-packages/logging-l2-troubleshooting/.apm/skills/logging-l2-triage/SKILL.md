@@ -92,23 +92,25 @@ The result is always a list (length ≥ 1). Length 1 = overdetermined case, sing
 
 ## Chain-walk loop
 
-Walk the ranked list top-down, step budget **5 expert invocations** per session. For each candidate:
+Walk the ranked list top-down, step budget **5 expert invocations** per session. Maintain a `walked` set of expert skills already invoked in this session (one entry per invocation). For each candidate:
 
-1. Invoke the expert: `Skill({"skill": "<candidate>"})`. The expert returns `findings` plus `raw_diagnostic_pass`, possibly with a `recommend` block.
+1. Invoke the expert: `Skill({"skill": "<candidate>"})`. The expert returns `findings` plus `raw_diagnostic_pass`, possibly with a `recommend` block. Add `<candidate>` to `walked`. Each invocation consumes one of the 5 budgeted slots.
 2. If the expert emitted a `recommend` block backed by a non-empty `findings` array, **STOP**: surface that `recommend` as the final case output.
-3. Otherwise apply the routing-policy below to decide the next hop. Add it to the front of the remaining list.
+3. Otherwise apply the routing-policy below to pick the next hop. If the routing-policy yields a hop, prepend it to the remaining list and continue from step 1. If the routing-policy yields STOP, exit the loop.
 4. If the step budget is exhausted, emit a `recommend` of type `manual-diagnosis` with the audit trail, and stop.
+
+The list is dynamic: routing-policy rule 1 may consume an entry from it, and rules 2 / 3 may prepend a node that was not originally in it.
 
 ## Routing-policy
 
-Apply in order; first match wins.
+Apply in order; first match wins. A candidate that equals the current node or is already in `walked` does not match — fall through to the next rule.
 
-1. **Empty findings** → `findings == []`. Take the next `downstream` node from the current expert per [references/topology.md](references/topology.md). For the terminal `opensearch` node, take `upstream` instead. If no neighbour remains in the topology, fall through to step 4.
-2. **Evidence cites an external component** → for any pattern in [references/cited-strings.md](references/cited-strings.md), match it (regex) against `findings[].evidence`. First match → next hop is that pattern's `points_to` node. If the `points_to` node has no expert in this package, escalate to the engineer.
-3. **`raw_diagnostic_pass` cites an external component** → same pattern set, applied to `raw_diagnostic_pass`. Covers the case where the expert surfaced the signal in the diagnostic-pass digest rather than in a structured finding (e.g. when `symptom_id == "unrecognized"`).
-4. **Otherwise** → STOP. The expert's `findings` is the final result; surface it (and any accompanying `recommend`) as the case output.
+1. **Empty findings** → `findings == []`. Prefer the next un-walked candidate already in the remaining ranked list. If the ranked list is exhausted, take the current expert's `downstream` node per [references/topology.md](references/topology.md); for the terminal `opensearch` node, take `upstream` instead. If the chosen neighbour is in `walked`, fall through to step 4.
+2. **Evidence cites an external component** → for any pattern in [references/cited-strings.md](references/cited-strings.md), match it (regex) against `findings[].evidence`. First match → next hop is that pattern's `points_to` node. If the `points_to` node equals the current node, is in `walked`, or has no expert in this package, fall through to step 3.
+3. **`raw_diagnostic_pass` cites an external component** → same pattern set, applied to `raw_diagnostic_pass`. Covers the case where the expert recognised a symptom but the structured `evidence` field didn't quote the cited string while the diagnostic-pass digest does. Same fall-through rules as step 2.
+4. **Otherwise (or all earlier rules fell through)** → STOP. The expert's `findings` is the final result; surface it (and any accompanying `recommend`) as the case output. If `findings` is empty here, escalate to the engineer with the audit trail (the chain exhausted its options).
 
-The routing-policy never reads the expert's prose narrative. It evaluates the structured fields and the regex patterns only. If a finding has neither evidence nor a recognised pattern, treat it as step 4 (STOP).
+The routing-policy never reads the expert's prose narrative. It evaluates the structured fields and the regex patterns only.
 
 ## Internal handoff envelope (mental model only)
 
@@ -117,7 +119,7 @@ triage_l2:
   input_shape: ticket | engineer
   candidates:                # ranked, length ≥ 1, walked top-down
     - target_skill: <one of the *-troubleshoot skills>
-      derived_from: direct_signal | topology_fallback | cited_strings | downstream_neighbour
+      derived_from: direct_signal | topology_fallback | cited_strings | topology_neighbour
       confidence: high | medium | low
   diagnostic_pass:           # the read-safe snapshot — every command run, its output, abbreviated
     - command: kubectl get pods -n logging
