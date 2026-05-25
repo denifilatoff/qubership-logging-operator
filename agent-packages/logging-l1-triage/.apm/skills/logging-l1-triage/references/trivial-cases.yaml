@@ -154,24 +154,3 @@ cases:
       message can also be produced by an OpenSearch outage — that is
       `opensearch`, not trivial.
 
-  - id: journal-negative-unprocessed
-    trigger:
-      - "negative number of unprocessed messages"
-      - "unprocessed messages: -"
-    knowledge_area: graylog-server
-    response: |
-      The Graylog journal directory was partially cleared while the
-      process kept its in-memory counters. Recovery:
-
-        1. Stop Graylog.
-        2. `rm -rf {{ graylog_volume }}/graylog/data/journal/*`
-        3. Start Graylog.
-
-      In-flight messages that were already in the journal at the
-      time of the partial cleanup are lost; messages still buffered
-      upstream (FluentD / FluentBit) will be re-delivered.
-    recommended_ticket_action: provide_procedure_then_close
-    notes: |
-      If the author has no SSH access on the Graylog VM, escalate
-      to `graylog-server` — the operator running the procedure needs
-      shell access.

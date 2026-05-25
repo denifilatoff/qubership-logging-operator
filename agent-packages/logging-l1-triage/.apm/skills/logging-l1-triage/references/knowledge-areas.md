@@ -5,8 +5,8 @@ Load this file in Step 1 (ticket-type routing) and Step 4
 
 Each knowledge area has a **slug** — a kebab-case identifier that is
 used directly as the value of `knowledge_area:` in the output, and
-matches the suffix of the corresponding L2 troubleshooting skill
-(`troubleshoot-<slug>`). Slugs are the source of truth across all
+matches the prefix of the corresponding L2 troubleshooting skill
+(`<slug>-troubleshoot`). Slugs are the source of truth across all
 three files (`SKILL.md`, this file, `trivial-cases.yaml`,
 `output-schemas.md`); never rename one without updating the others.
 
@@ -24,25 +24,24 @@ L2 skills with runtime / server access.
 
 | Slug | Area | Target L2 skill |
 |---|---|---|
-| `graylog-server` | Graylog Server (config, performance, journal, search/API, indices & rotation, plugins, streams, pipelines, backup retention) | `troubleshoot-graylog-server` |
-| `opensearch` | OpenSearch / Elasticsearch (cluster health, indexer, mapping, security plugin, ES→OS migration, sizing) | `troubleshoot-opensearch` |
-| `mongodb` | MongoDB (Graylog metadata store) | `troubleshoot-mongodb` |
-| `fluent-collectors` | FluentD and FluentBit (pod lifecycle, config & parsing, delivery to Graylog, resources, routing) | `troubleshoot-fluent-collectors` |
-| `monitoring` | Telegraf, Prometheus, Grafana, Zabbix (for logging-related concerns) | `troubleshoot-monitoring` |
-| `backup` | Backup tooling — backup job, export/import/restore | `troubleshoot-backup` |
+| `graylog-server` | Graylog Server (config, performance, journal, search/API, indices & rotation, plugins, streams, pipelines, backup retention) | `graylog-server-troubleshoot` |
+| `opensearch` | OpenSearch / Elasticsearch (cluster health, indexer, mapping, security plugin, ES→OS migration, sizing) | `opensearch-troubleshoot` |
+| `mongodb` | MongoDB (Graylog metadata store) | `mongodb-troubleshoot` |
+| `fluent-collectors` | FluentD and FluentBit (pod lifecycle, config & parsing, delivery to Graylog, resources, routing) | `fluent-collectors-troubleshoot` |
+| `monitoring` | Telegraf, Prometheus, Grafana, Zabbix (for logging-related concerns) | `monitoring-troubleshoot` |
+| `backup` | Backup tooling — backup job, export/import/restore | `backup-troubleshoot` |
 
 ## Deployment troubleshooting
 
-L2 skills with access to deployment artefacts (CI logs, Helm values,
-Ansible output).
+L2 skills with access to deployment artefacts (CI logs, Helm values).
 
 | Slug | Area | Target L2 skill |
 |---|---|---|
-| `deploy-pipeline` | CI/CD Pipelines — Jenkins, ArgoCD, GitLab CI, AppDeployer | `troubleshoot-deploy-pipeline` |
-| `deploy-ansible` | Ansible installer — `external-logging-installer` playbook | `troubleshoot-deploy-ansible` |
-| `deploy-helm` | Helm / K8s Operators / CRDs | `troubleshoot-deploy-helm` |
-| `deploy-prereqs` | OS / K8s prerequisites — package versions, K8s compatibility, ARM/x86, disk sizing | `troubleshoot-deploy-prereqs` |
-| `deploy-airgap` | Artifact registries / Air-gap installations | `troubleshoot-deploy-airgap` |
+| `deploy-pipeline` | CI/CD Pipelines — Jenkins, ArgoCD, GitLab CI, AppDeployer | `deploy-pipeline-troubleshoot` |
+| `deploy-helm` | Helm / K8s Operators / CRDs | `deploy-helm-troubleshoot` |
+| `deploy-prereqs` | OS / K8s prerequisites — package versions, K8s compatibility, ARM/x86, disk sizing | `deploy-prereqs-troubleshoot` |
+| `deploy-airgap` | Artifact registries / Air-gap installations | `deploy-airgap-troubleshoot` |
+| `deploy-ansible` | Ansible installer — `external-logging-installer` playbook (VM-Docker deployment) | `none` — out of scope per the methodology's K8s-only invariant; L1 routes such tickets to the installer/VM-ops team and stops |
 
 ## Cross-cutting modules
 

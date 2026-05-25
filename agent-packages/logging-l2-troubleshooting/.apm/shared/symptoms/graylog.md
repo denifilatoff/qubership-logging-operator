@@ -6,23 +6,19 @@ This section describes common problems with Graylog (server, web UI, deflector/i
 
 ### Unable to Connect to Graylog via Browser
 
-To identify the root cause:
-
-Connect via SSH to the virtual machine with Graylog deployed.
-
-To see the information about `STATUS` of Graylog Docker containers, execute the following command.
+To identify the root cause, inspect the Graylog workload state in the cluster:
 
 ```bash
-docker ps -f "name=graylog"
+kubectl -n <logging-ns> get pods,svc -l app.kubernetes.io/name=graylog -o wide
+kubectl -n <logging-ns> describe pod <graylog-pod>
 ```
 
-The normal output contains four running containers with `STATUS` field equal to "UP N days.".
-The four running containers include `graylog_web_1`, `graylog_graylog_1`, `graylog_storage_1`, and `graylog_mongo_1`.
+Healthy state: all Graylog pods `Running` with no recent restarts. If a pod is in `CrashLoopBackOff`,
+`OOMKilled`, or has a high restart count, follow the matching section below (OOM, performance, etc.).
 
-In case the output contains a lesser number of containers, or their status differs from the norm,
-then try to restart the container with the problem.
-
-If you are unable to connect to the virtual machine using SSH, check the network connection using the `ping` command.
+If the pods look healthy but the UI is still unreachable from the browser, the path between the browser
+and the Service is the next thing to check — Ingress/Route, TLS, and any L7 load balancer in front of
+Graylog. The HTTP API at `https://<graylog>/api/...` is the canonical reachability probe.
 
 ### Unable to Read Log Messages
 
@@ -48,66 +44,59 @@ To fix it manual actions are required. Route URL needs to be added into _os_sni_
 
 ## Typical Issues
 
-### HDD Full on Graylog VM
+### Storage Full
 
 **Symptoms:**
 
 * Graylog does not process any new messages.
 * Search in logs shows various errors (for example, HTTP 500).
-* OpenSearch is down, container constantly restarting.
+* OpenSearch pod is down or constantly restarting.
 
 **How to check:**
 
-1. Log in to Graylog VM via SSH and execute `df -h`.
-2. It shows you the information about the HDD utilization.
+```bash
+# PVC utilisation behind Graylog and OpenSearch
+kubectl -n <logging-ns> get pvc
+kubectl -n <logging-ns> describe pvc <graylog-pvc> <opensearch-pvc>
+
+# Node-level disk pressure on the nodes hosting the workloads
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}: {.status.conditions[?(@.type=="DiskPressure")].status}{"\n"}{end}'
+
+# OpenSearch-side view (most informative)
+curl -sk -u <u>:<p> https://<os-host>:9200/_cat/allocation?v
+```
 
 **How to fix:**
 
-1. Log in to Graylog VM via SSH as root.
-2. Execute the following commands:
+The disk-cleanup itself — clearing OpenSearch node data on the underlying PVC — is **out of scope for
+these skills** (K8s-only execution surface; we do not run destructive workflows against PVC contents).
+Escalate to the cluster operator: the recovery procedure typically involves scaling down the OpenSearch
+StatefulSet, mounting the PVC into a debug pod, removing the noisy node data, and starting OpenSearch
+back up. The exact procedure depends on the chart and the operator team's runbook.
 
-   ```bash
-   docker stop \
-        graylog_web_1 \
-        graylog_graylog_1 \
-        graylog_storage_1 \
-        graylog_mongo_1
+What stays in scope here is unlocking indices once disk pressure is relieved. If you see `index
+read-only` warnings in the Graylog UI after the cleanup, unlock the indices via the OpenSearch HTTP API:
 
-   rm -rf /srv/docker/graylog/opensearch/nodes/
+```bash
+curl -X PUT -u <username>:<password> -H "Content-Type: application/json" \
+     -d '{"index.blocks.read_only_allow_delete": null}' \
+     https://<opensearch-host>:9200/_settings
+```
 
-   docker start \
-         graylog_mongo_1 \
-         graylog_storage_1 \
-         graylog_graylog_1 \
-         graylog_web_1
-   ```
+**Note**: Any logs that lived on the wiped node data are lost. To prevent this in the future, adjust
+the Graylog index-rotation policy to fit the PVC size. Restore old logs from backup if you have one.
 
-3. If after cleaning up disk space you see 'index read-only' warnings in the Graylog Web UI,
-   execute the following command on Graylog VM via SSH to unlock the index:
+To check which indices are blocked:
 
-   ```bash
-   curl -X PUT -u <username>:<password> -H "Content-Type: application/json" -d '{"index.blocks.read_only_allow_delete": null}' http://localhost:9200/_settings
-   ```
+```bash
+curl -X GET -u <username>:<password> -H "Content-Type: application/json" \
+     https://<opensearch-host>:9200/<index_name>/_settings
+```
 
-   or command for usage in cloud Graylog:
+If an index has `"read_only_allow_delete": "true"`, it is blocked and cannot accept new data — unlock it
+with the PUT above.
 
-   ```bash
-   curl -X GET -u <username>:<password> -H "Content-Type: application/json" -d '{"index.blocks.read_only_allow_delete": null}' opensearch.opensearch-service:9200/_settings
-   ```
-
-   **Note**: All the existing logs are lost. To prevent it in the future, you need to adjust the indices
-   rotation policy in Graylog according to the available HDD size. You can restore old logs from the backup.
-
-   For checking blocked indices use the next command:
-
-   ```bash
-   curl -X GET -u <username>:<password> -H "Content-Type: application/json" opensearch.opensearch-graylog:9200/index_name
-   ```
-
-   If some index has `"read_only_allow_delete": "true"` it means that this index is blocked and new data
-   can't be store in it. So you should unlock this index.
-
-### Graylog Container OOM Killed (out of RAM)
+### Graylog Pod OOM Killed (out of RAM)
 
 **Symptoms:**
 
@@ -115,74 +104,43 @@ Graylog Web UI is not accessible or displays a 504 error.
 
 **How to check:**
 
-1. Login on Graylog VM via SSH and execute `docker ps`
-2. It shows the container's status. If Graylog/opensearch containers are constantly restarting
-   then it could be memory related issue
+```bash
+kubectl -n <logging-ns> get pods -l app.kubernetes.io/name=graylog
+kubectl -n <logging-ns> describe pod <graylog-pod> | grep -A3 'Last State\|OOMKilled'
+```
+
+If the pod's `LastState.terminated.reason` is `OOMKilled`, or restart count is climbing, the cause is
+memory-related. The same check applies to the OpenSearch pod (`-l app.kubernetes.io/name=opensearch`).
 
 **How to fix:**
 
-You can use any one of the following options to change the memory settings:
+Heap and memory limits for Graylog and its MongoDB sidecar are owned by the operator's
+`LoggingService` CR (or, on a chart-only install, by Helm values). Do **not** edit pod specs or
+container env directly — the operator reconciles them back.
 
-**Using Jenkins job:**
+Adjust:
 
-Run the redeploy of the Logging service procedure with the corrected `graylog_heap_size` and `es_heap_size` parameters.
+* `graylog.graylogResources.{requests,limits}.memory` — pod memory request and limit. Chart defaults:
+  requests `1536Mi`, limits `2048Mi`.
+* `graylog.javaOpts` — Graylog server `JAVA_OPTS` string. Chart-shipped default is
+  `-Xms1024m -Xmx1024m`. Keep `-Xmx` inside the pod's memory limit (rule of thumb: heap ≤ ~75% of the
+  limit so the off-heap and JVM-internal allocations fit).
+* `graylog.mongoResources.{requests,limits}.memory` if MongoDB itself is OOMing (chart default 256Mi).
 
-**In manual mode:**
+For OpenSearch, **this operator does not manage OpenSearch lifecycle** — `LoggingService.spec.openSearch`
+is only a client config (`url`, TLS, credentials). OpenSearch heap and pod limits live in whatever
+operator / chart deploys OpenSearch in your installation. The `installation.md` document in this repo
+notes: "When deploying Graylog in the cloud, you need to include the resource requirements for the
+OpenSearch cluster — refer to the OpenSearch documentation for details on hardware requirements."
 
-1. Log in to Graylog VM via SSH as root.
-2. Execute the following command and remember the ID of the container with Graylog:
+For sizing reference (pairings of message rate × Graylog heap × OpenSearch heap × disk speed) the
+operator repo ships a Hardware-requirements table at `docs/installation.md` with concrete Small /
+Medium / Large profiles calibrated to message-per-second load. If that file is reachable from the
+agent's working directory (it is, in this repo), grep it for the table; otherwise the
+LoggingService chart's defaults (cited above) are the canonical starting point.
 
-   ```bash
-   docker inspect --format '{{.Id}}' graylog_graylog_1
-   ```
-
-3. Execute the following command and remember the ID of the container with OpenSearch:
-
-   ```bash
-   docker inspect --format '{{.Id}}' graylog_storage_1
-   ```
-
-4. Stop the Docker service using the following command:
-
-   ```bash
-   service docker stop
-   ```
-
-5. Change the memory parameter for the container with Graylog:
-   In the `/var/lib/docker/containers/<container_id>/config.v2.json` file, find the `GRAYLOG_SERVER_JAVA_OPTS`
-   parameter and correct its value.
-
-   For example, it was 2GB:
-
-   ```bash
-   GRAYLOG_SERVER_JAVA_OPTS = -Xms2048m -Xmx2048m
-   ```
-
-   Corrected to 4GB:
-
-   ```bash
-   GRAYLOG_SERVER_JAVA_OPTS = -Xms4096m -Xmx4096m
-   ```
-
-6. Change the memory parameter for the container with OpenSearch:
-
-   In the `/var/lib/docker/containers/<container_id>/config.v2.json` file, find the `ES_JAVA_OPTS`
-   parameter and correct its value.
-
-   By analogy with Graylog (step 5).
-
-7. Start the Docker and restart the containers:
-
-   ```bash
-   service docker start
-
-   docker restart \
-        graylog_web_1 \
-        graylog_graylog_1 \
-        graylog_storage_1 \
-        graylog_mongo_1
-
-   ```
+The operator picks up CR / values changes and rolls the Graylog StatefulSet on its own. If a rollout
+doesn't happen, force it with `kubectl -n <logging-ns> rollout restart sts/graylog`.
 
 ### Low Graylog Performance
 
@@ -194,37 +152,41 @@ Run the redeploy of the Logging service procedure with the corrected `graylog_he
 
 **How to check:**
 
-1. Log in to Graylog VM via SSH as root
-2. Navigate to `top`
-3. Check the resource consumption. You can also check resource consumption using System Monitoring if available.
-   Define what kind of resource (CPU/RAM/HDD IOPS) is not enough according to the
-   [documentation](../installation.md#hwe).
+```bash
+# Pod-level resource consumption
+kubectl -n <logging-ns> top pod -l 'app.kubernetes.io/name in (graylog,opensearch)'
+
+# Node-level pressure on the nodes hosting Graylog / OpenSearch
+kubectl top nodes
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}: cpu={.status.conditions[?(@.type=="CPUPressure")].status} mem={.status.conditions[?(@.type=="MemoryPressure")].status} disk={.status.conditions[?(@.type=="DiskPressure")].status}{"\n"}{end}'
+
+# Graylog-side view — the journal is the canonical indicator
+curl -sk -u <u>:<p> https://<graylog>/api/system/journal
+```
+
+Identify whether the bottleneck is CPU, RAM, or disk IOPS. OpenSearch is disk-IO greedy; Graylog under
+journal pressure becomes both CPU- and disk-heavy.
 
 **How to fix:**
 
-Add missing resources to the target VM.
+Increase the constrained resource via the `LoggingService` CR (or Helm values for chart-only installs).
+The relevant Graylog-side fields are `graylog.graylogResources.{requests,limits}` and
+`graylog.javaOpts` (heap). OpenSearch lifecycle is **not** managed by this operator — adjust it via
+whatever operator / chart deploys OpenSearch in your installation. The logging-operator rolls
+Graylog on its own once the CR / values change.
 
-See the section [Performance tuning](#performance-tuning) for additional information
-about Graylog's tiny performance tuning aspects
+See [Performance tuning](#performance-tuning) for Graylog-internal knobs (process/output buffers,
+ring size, journal toggle).
 
-Restart Graylog by executing the following commands:
+If a restart is needed (e.g. to apply a ConfigMap-loaded change that did not pick up):
 
 ```bash
-docker restart \
-    graylog_web_1 \
-    graylog_graylog_1 \
-    graylog_storage_1 \
-    graylog_mongo_1
+kubectl -n <logging-ns> rollout restart sts/graylog
 ```
 
-After restart go to `/system/inputs` in the Graylog UI and stop input messages by button `Stop input`.
-This helps to prevent repeated Graylog flooding.
-
-Go to detailed information about node by /system/nodes and button `Details`.
-
-Wait for the input buffer to be freed. This will mean that Graylog has processed the messages.
-
-Wait for journal utilization will reduce to values 0-5%. After that, you can run input.
+After restart, go to `/system/inputs` in the Graylog UI and click `Stop input` for each input. This
+prevents repeated flooding. Wait for the input buffer to drain and the journal utilization to fall to
+0–5%, then re-enable the inputs.
 
 ### Graylog Not Processing Messages
 
@@ -245,24 +207,24 @@ Root cause: OpenSearch does not take payload.
 
 Possible reasons and solutions:
 
-* [HDD Full on Graylog VM](#hdd-full-on-graylog-vm)
-* [Graylog container OOM killed (out of RAM)](#graylog-container-oom-killed-out-of-ram)
+* [Storage Full](#storage-full)
+* [Graylog Pod OOM Killed (out of RAM)](#graylog-pod-oom-killed-out-of-ram)
 * [Low Graylog Performance](#low-graylog-performance)
-* OpenSearch issue. Restarting the containers can help in this case. For more information, see [Low Graylog performance](#low-graylog-performance).
+* OpenSearch issue. Restarting the OpenSearch pod can help in this case (`kubectl -n <logging-ns> rollout restart sts/opensearch`). For more information, see [Low Graylog performance](#low-graylog-performance).
 
 ### Index Oversized
 
 **Symptoms:**
 
-* The HDD space utilization on the Logging VM is high. It exceeds the maximum possible utilization configured
-  in the indices rotation policies.
+* PVC utilisation behind Graylog/OpenSearch is high. It exceeds the maximum possible utilisation
+  configured in the indices rotation policies.
 * The size of one of the indices in OpenSearch is very big, more than what is configured
   in the `Max index size` parameter on the Index Set configuration.
 
-You can check the indices size using the following command on Logging VM:
+You can check the indices size using the Graylog HTTP API:
 
 ```bash
-curl -X GET -u <username>:<password> -sk https://localhost/api/system/indexer/indices
+curl -X GET -u <username>:<password> -sk https://<graylog>/api/system/indexer/indices
 ```
 
 **Root cause:**
@@ -273,45 +235,32 @@ Graylog indexer bug. It is a rare cause. A manual workaround can be applied if t
 
 **Note**: Take a backup prior to deleting.
 
-Delete an oversized index manually by executing the following command on the Logging VM:
+Delete an oversized index manually via the Graylog API:
 
 ```bash
-curl -X DELETE -u <username>:<password> -H "X-Requested-By: graylog" https://localhost/api/system/indexer/indices/<index name>
+curl -X DELETE -u <username>:<password> -H "X-Requested-By: graylog" https://<graylog>/api/system/indexer/indices/<index_name>
 ```
 
 ### Negative number of Unprocessed Messages
 
 If you have a negative number of unprocessed messages in the `Disk Journal` section it means that
-you clean the journal directory but not completely.
+the journal directory was cleared partially while Graylog kept its in-memory counters.
 
 **How to fix:**
 
-Stop Graylog container:
+Recovery is to stop Graylog, completely empty the journal directory on its persistent storage, and
+start Graylog again. In-flight messages still in the journal at the time of cleanup are lost; messages
+buffered upstream (FluentD / FluentBit) will be re-delivered.
 
-```bash
-docker stop graylog_graylog_1
-```
+The actual cleanup runs against the Graylog StatefulSet's PVC — the typical sequence is `kubectl
+-n <logging-ns> scale sts graylog --replicas=0`, mount the PVC into a debug pod, `rm -rf` the
+journal directory, scale back up. The exact mechanic depends on the chart and the operator team's
+runbook — escalate to the cluster operator. This skill emits the diagnosis but does not execute the
+PVC-side cleanup (K8s-only execution surface; destructive writes against PVC contents are out of scope).
 
-Completely remove the directory:
-
-```bash
-{{ graylog_volume }}/graylog/data/journal/*
-```
-
-where `{{ graylog_volume }}` by default has the value `/srv/docker/graylog`, so to remove you need to execute a command:
-
-```bash
-rm -rf /srv/docker/graylog/graylog/data/journal/*
-```
-
-Start Graylog container:
-
-```bash
-docker start graylog_graylog_1
-```
-
-If you'd like to switch off the journal messages, you should also update `/srv/docker/graylog/graylog/config/graylog.conf`
-and set parameter `message_journal_enabled=false`.
+If you'd like to disable the journal entirely, set `message_journal_enabled=false` in the Graylog
+configuration. Under the operator, this lives in the `LoggingService` CR (or the Helm values for
+chart-only installs) — do not edit the ConfigMap directly, the operator reconciles it back.
 
 ### Incorrect timestamps in Graylog
 
@@ -463,7 +412,7 @@ For example:
 
 If you manually create the index with such a name, you have to remove it. And do not try to use such a name in the future.
 
-If you are faced with such a problem during the update of the Logging VM it means that before the update
+If you are faced with such a problem during a Logging-stack upgrade, it means that before the upgrade
 you must **disable all Graylog Inputs**.
 
 To do it you need:
@@ -502,22 +451,26 @@ The symptoms (from small overload to significant overload):
 3. Logs search does not show recent logs (because they are in Graylog's journal, not in OpenSearch)
 4. Graylog UI slowness, random 500 and 503 errors
 5. Graylog UI is down
-6. Graylog VM CPU is fully utilized, VM became unresponsive even via SSH
+6. CPU on the node hosting Graylog is fully utilised — Graylog pod becomes unresponsive, `kubectl exec` into it stalls
 
 ### Common performance principles
 
-* First of all, check the hardware resources of your Graylog instance according to the [table](../installation.md#hwe).
-  The most important thing is disk speed and almost all performance issues can be solved by increasing it.
-* Use `sysbench` to measure disk speed
-* RAM and CPU are the second priority but it is also important
-* Graylog does not require much RAM. 4-8 GB is enough. Better give more RAM to OpenSearch
+* First of all, check that the Graylog pod resource limits (`graylog.graylogResources` in the
+  LoggingService CR / Helm values) and the OpenSearch deployment's resource limits and storage class
+  match the expected load. The most important thing is disk speed on the OpenSearch volume; almost all
+  performance issues can be solved by giving OpenSearch faster underlying storage.
+* RAM and CPU are the second priority but they also matter.
+* Graylog does not require much RAM. 4–8 GB is enough. Prefer to give more RAM to OpenSearch.
 
 ## Extra tips and tricks
 
-### `/srv/docker/graylog/graylog/config/graylog.conf`
+### `graylog.conf` settings
 
-* `processbuffer_processors`, `outputbuffer_processors` - set to CPU count / 2.
-* `ring_size` - set to 131072 or to 262144 if you have 4+ RAM for Graylog. Higher values are not recommended
+Under the operator, these knobs live in the `LoggingService` CR (or the Helm values for chart-only
+installs), which the operator renders into the Graylog ConfigMap. Do not edit the ConfigMap directly.
+
+* `processbuffer_processors`, `outputbuffer_processors` — set to CPU count / 2.
+* `ring_size` — set to 131072, or to 262144 if you have 4+ GB RAM allocated to Graylog. Higher values are not recommended.
 
 ### Crackdown for heavy loads
 

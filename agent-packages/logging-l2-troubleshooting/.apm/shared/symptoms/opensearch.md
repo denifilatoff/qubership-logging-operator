@@ -174,29 +174,23 @@ OpenSearch/Elasticsearch documentation
 Usually, if you want to increase the memory limit for OpenSearch it means that you don't want
 to do a deeper analysis of the problems. And you want just adding resources in hopes it will help.
 
-To fix this issue you first of all need to decrease the memory limit for OpenSearch to ~32 GB.
+To fix this issue you first of all need to decrease the OpenSearch heap (`-Xmx`) to ~32 GB.
 
-Second, you need to remember that on the Logging VM, there are other applications and processes like Graylog,
-MongoDB and Nginx. All these applications run as Docker containers and require some memory to run. Also, Java
-applications can use more than set in `-Xmx`. This happens because of the way Java handles memory.
+Second, the Graylog and OpenSearch pods coexist with MongoDB and other workloads on the same Kubernetes
+nodes. Each Java pod can use more than its `-Xmx` because of how the JVM handles off-heap memory, and
+the node still needs headroom for the kubelet, container runtime, and any neighbouring pods. Keep the
+sum of pod memory requests on a node well below the node's allocatable memory.
 
-Deployment scripts of the Logging VM allow to specify limits for Graylog and OpenSearch.
-So you have to specify a summary of limits for Graylog and OpenSearch less than the total VM memory size.
-Also, you need to remember that you must leave 20-50% of free RAM on the VM.
+For concrete sizing pairings (message rate × Graylog heap × OpenSearch heap × CPU × disk), the operator
+repo ships a Hardware-requirements table at `docs/installation.md` with calibrated Small / Medium /
+Large profiles — grep it from the agent's working directory. OpenSearch heap recommendations there top
+out at "16+ GB (but less than ~32 GB)" — the same compressed-OOPs ceiling this section is about.
 
-Some examples (it's not recommendations, just examples):
+Note: this operator does **not** manage OpenSearch lifecycle (only its client config in
+`LoggingService.spec.openSearch.url` / `tls`). The actual OpenSearch heap and pod limits live in
+whatever operator or chart deploys OpenSearch in your installation — adjust them there.
 
-* Graylog VM has 16 GB RAM, in this case, you can allocate:
-  * Graylog - 4 GB
-  * OpenSearch - 8 GB
-* Graylog VM has 32 GB RAM, in this case, you can allocate:
-  * Graylog - 8 GB
-  * OpenSearch - 12-18 GB
-* Graylog VM has 64 GB RAM, in this case, you can allocate:
-  * Graylog - 20 GB
-  * OpenSearch - 24-31 GB
-
-After it and after you will fix OOM in Graylog or OpenSearch you can try to analyze which other
+After this, and after you fix OOM in Graylog or OpenSearch, you can try to analyze which other
 performance issues you have.
 
 ## Index read-only Warnings
@@ -242,19 +236,12 @@ For example:
   curl -X DELETE -u <username>:<password> http://localhost:9200/graylog_30,graylog_31
   ```
 
-If OpenSearch is unavailable or you can't use it API usually OpenSearch save all it data in the host directories:
+If OpenSearch is unreachable via API, on-disk cleanup of its data PVC is **out of scope** for these
+skills (Kubernetes-only execution surface; we do not enter pod filesystems for destructive cleanup).
+Escalate to the operator running the cluster — they have the procedure for clearing the PVC behind
+the OpenSearch StatefulSet via a debug pod or a scale-down + cleanup workflow.
 
-```bash
-/srv/docker/graylog/opensearch/nodes
-/srv/docker/graylog/opensearch/archives
-/srv/docker/graylog/opensearch/snapshots
-```
-
-So you can clean data from these directories manually.
-
-**Warning!** After remove some data from directories manually you **have to restart** OpenSearch container.
-
-Next, you can run the command to remove `read-only` flag from indices:
+If OpenSearch API is reachable, run the command to remove the `read-only` flag from indices:
 
 ```bash
 curl -X PUT -u <username>:<password> -H "Content-Type: application/json" -d '{"index.blocks.read_only_allow_delete": null}' http://localhost:9200/_settings
@@ -273,7 +260,7 @@ You need to configure the indices rotation in Graylog to avoid high disk space u
 * If you want to use time or message count based on rotation, you **must** correctly calculate the required storage,
   but please keep in mind that rotation strategies can use unpredictable storage size on disk
 
-You can disable the OpenSearch disk allocator feature by executing the following command on the Logging VM:
+You can disable the OpenSearch disk allocator feature by executing the following API call:
 
 **Warning!** We strongly don't recommend use it for production environments!
 

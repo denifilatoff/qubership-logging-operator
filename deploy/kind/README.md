@@ -1,5 +1,11 @@
 # Local kind deployment
 
+> All commands below assume the working directory is `deploy/kind/`.
+>
+> ```bash
+> cd deploy/kind
+> ```
+
 ## Prereqs
 
 ```bash
@@ -10,13 +16,13 @@ helm plugin install https://github.com/databus23/helm-diff --verify=false
 ## Install
 
 ```bash
-cp deploy/kind/.env.example deploy/kind/.env
-# edit deploy/kind/.env — set CLUSTER_NAME and BACKEND (graylog | victorialogs)
+cp .env.example .env
+# edit .env — set CLUSTER_NAME and BACKEND (graylog | victorialogs)
 
-kind create cluster --name "$(grep ^CLUSTER_NAME deploy/kind/.env | cut -d= -f2)"
+kind create cluster --name "$(grep ^CLUSTER_NAME .env | cut -d= -f2)"
 
-set -a && source deploy/kind/.env && set +a
-helmfile -f deploy/kind/helmfile.yaml.gotmpl apply
+set -a && source .env && set +a
+helmfile -f helmfile.yaml.gotmpl apply
 ```
 
 > First `apply` with `BACKEND=graylog` pulls a ~1.5GB OpenSearch image — give it 30–40 min on a fresh node.
@@ -24,12 +30,12 @@ helmfile -f deploy/kind/helmfile.yaml.gotmpl apply
 ## Switch backend
 
 ```bash
-# tear down current backend, edit BACKEND in deploy/kind/.env, then apply again
-set -a && source deploy/kind/.env && set +a
-helmfile -f deploy/kind/helmfile.yaml.gotmpl destroy
+# tear down current backend, edit BACKEND in .env, then apply again
+set -a && source .env && set +a
+helmfile -f helmfile.yaml.gotmpl destroy
 
 # edit BACKEND, source again, apply
-helmfile -f deploy/kind/helmfile.yaml.gotmpl apply
+helmfile -f helmfile.yaml.gotmpl apply
 ```
 
 ## Access the UI
@@ -66,7 +72,7 @@ kubectl --context "kind-$CLUSTER_NAME" -n log-generator port-forward svc/qubersh
 # Metrics: http://localhost:8080/metrics
 ```
 
-Chart lives in the sibling repo at `../qubership-log-generator/charts/qubership-log-generator` relative to this repo root — clone it next to `qubership-logging-operator`.
+Chart lives in the sibling repo at `../../../qubership-log-generator/charts/qubership-log-generator` relative to this directory — clone `qubership-log-generator` next to `qubership-logging-operator`.
 
 ## Hooks
 
@@ -78,7 +84,7 @@ Chart lives in the sibling repo at `../qubership-log-generator/charts/qubership-
 ## Uninstall
 
 ```bash
-set -a && source deploy/kind/.env && set +a
-helmfile -f deploy/kind/helmfile.yaml.gotmpl destroy
+set -a && source .env && set +a
+helmfile -f helmfile.yaml.gotmpl destroy
 kind delete cluster --name "$CLUSTER_NAME"
 ```

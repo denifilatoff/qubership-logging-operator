@@ -12,7 +12,7 @@ top-level fields.
 
 All `knowledge_area:` values are slugs from
 [`knowledge-areas.md`](knowledge-areas.md). Same for `target_skill:`,
-which is always either a `troubleshoot-<slug>` name or the literal
+which is always either a `<slug>-troubleshoot` name or the literal
 `none` (for non-troubleshooting destinations and for the
 `ambiguous` fallback).
 
@@ -53,7 +53,7 @@ the decision flow).
 
 ```yaml
 outcome: escalate
-target_skill: troubleshoot-fluent-collectors
+target_skill: fluent-collectors-troubleshoot
 knowledge_area: fluent-collectors
 ticket_type: defect
 priority: P2                                   # P0 catastrophe / P1 degradation /
@@ -77,7 +77,7 @@ l2_context:
 Field rules:
 
 - `target_skill` and `knowledge_area` must agree with the row in
-  `knowledge-areas.md` — the slug after `troubleshoot-` is the
+  `knowledge-areas.md` — the slug before `-troubleshoot` is the
   area slug.
 - `priority` is the L1 estimate based on author-reported scope and
   severity. L2 may revise it.

@@ -15,5 +15,5 @@ the `logging-l1-triage` skill before drafting any reply.
 
 L1 triage never executes diagnostic commands, never modifies
 configuration, and never closes tickets. If the user is asking you to
-run `kubectl`, SSH into a host, or change a ConfigMap, that is L2
-work — escalate via the skill's output schema instead of acting.
+run `kubectl` or change a ConfigMap, that is L2 work — escalate via the
+skill's output schema instead of acting.
