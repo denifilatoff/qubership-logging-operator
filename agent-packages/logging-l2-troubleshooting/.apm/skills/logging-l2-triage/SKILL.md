@@ -25,7 +25,7 @@ Only if discovery genuinely fails (RBAC denial, missing secret) escalate to the 
 
 Read [references/shared-contract.md](references/shared-contract.md) first. Action tiers, read-before-recommend, recommend-block schema. They apply to triage too: do **not** route blind. If the diagnostic pass can't be read, escalate to the engineer rather than guessing.
 
-You never run `recommend`-tier actions yourself. You also don't run a knowledge-area's heavy diagnostics — that is why you invoke the area skill at the end. Your scope is the cluster-wide initial diagnostic pass below, plus matching against the signal table.
+You never run `recommend`-tier actions yourself. You also don't run a knowledge-area's heavy diagnostics — that is why you invoke the area skill at the end. Your scope is the cluster-wide initial diagnostic pass below, plus matching against `topology.md` and `cited-strings.md`.
 
 ## Initial read-safe diagnostic pass
 
@@ -53,7 +53,7 @@ curl -sk -u <u>:<p> https://<graylog>/api/system/inputstates
 # 3b. Graylog input-side errors. Catches GELF frame-size drops and similar
 #     input-parser issues that don't surface in /api/system/* but explain
 #     "logs not arriving" without any collector-side failure. Routes to
-#     graylog-server first via the signal-table row for TooLongFrameException.
+#     graylog-server first (TooLongFrameException is graylog-side).
 kubectl -n <ns> logs <graylog-pod> --tail=500 | grep -iE 'TooLongFrame|max_message_size|drop'
 
 # 4. OpenSearch cluster health and disk. RED status / unassigned shards / read-only flags
@@ -71,7 +71,7 @@ kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}: {.status.condi
 
 # 6. Operator / Helm state. A LoggingService in a bad reconcile state, or a Helm release
 #    in failed/pending state, redirects to the deployment area (not yet covered by a
-#    skill in this package — see signal-table.md "Areas not covered yet").
+#    skill in this package — see topology.md "Coverage gaps").
 kubectl get loggingservice -A
 helm list -A | grep -i log
 ```
@@ -80,81 +80,61 @@ Endpoints in step 3–4: `<graylog>` and `<os-host>` resolve in-cluster (Service
 
 Capture each command's actual output — those strings are your `evidence` for the handoff.
 
-## Routing — build the ranked candidate list
+## Build the ranked candidate list
 
-Match the observations against [references/signal-table.md](references/signal-table.md). That file has the symptom → target-skill mapping with priors, the downstream-error-in-upstream-log principle, and class-level fallback chains. Do not paraphrase it back into this SKILL; load it on demand and cite the rows or principles you matched.
+Read [references/topology.md](references/topology.md) and the diagnostic-pass output above. Produce a ranked list of expert skills to walk.
 
-The output of routing is always a **ranked list of candidates** (length ≥ 1), not a single pick. Build it in this order:
+1. **Direct hits** — any node whose zone shows concrete signal in the diagnostic pass goes onto the list first, ordered by signal strength.
+2. **Topology fallback** — if step 1 surfaces nothing, ask "where does the symptom most plausibly originate?" given the topology graph, and walk from there in the natural data-flow order (`app-pods → fluentbit → fluentd → graylog → opensearch` for "logs not arriving"; reversed for "stored logs corrupted").
+3. **Coverage check** — drop any candidate whose `skill` field in topology.md is `null` (those zones have no expert in this package; if the diagnostic pass clearly points at one, hand back to the engineer per [references/topology.md](references/topology.md#coverage-gaps) and stop).
 
-1. Rows from the seed table whose signals fired in the diagnostic pass, ranked by `match strength × prior`.
-2. Plus any area named by the downstream-error-in-upstream-log principle, even when the row-based probe wasn't run.
-3. If steps 1–2 yield nothing but the symptom matches a class in the fallback-chains table → use that chain verbatim.
-4. If still nothing → don't invent a target. Emit a `recommend` for manual diagnosis with the full diagnostic pass attached, and stop.
+The result is always a list (length ≥ 1). Length 1 = overdetermined case, single hop expected.
 
-A list of length 1 is the overdetermined case: confirm-or-recommend, no fallback.
+## Chain-walk loop
 
-## Chain of hypotheses
+Walk the ranked list top-down, step budget **5 expert invocations** per session. For each candidate:
 
-The candidate list is walked top-down by a single loop:
+1. Invoke the expert: `Skill({"skill": "<candidate>"})`. The expert returns `findings` plus `raw_diagnostic_pass`, possibly with a `recommend` block.
+2. If the expert emitted a `recommend` block backed by a non-empty `findings` array, **STOP**: surface that `recommend` as the final case output.
+3. Otherwise apply the routing-policy below to decide the next hop. Add it to the front of the remaining list.
+4. If the step budget is exhausted, emit a `recommend` of type `manual-diagnosis` with the audit trail, and stop.
 
-```
-for candidate in ranked_list:
-    Skill({"skill": candidate})
-    if candidate emitted a recommend:
-        finish — emit recommend for that cause, stop
-    if candidate returned hypothesis_refuted:
-        switch signal_class:
-          clean:                  continue with the next candidate already in ranked_list
-          secondary_backpressure: find immediate downstream of <candidate> per topology table;
-                                  if not yet walked, prepend to remaining list;
-                                  else walk one more hop downstream
-          secondary_quoted:       for each entry in cited_external_components, look up the cited-string map;
-                                  prepend each match to the remaining list;
-                                  if no match, treat as clean
-        continue
-    if step budget exhausted:
-        break
-emit a recommend for manual diagnosis with the full audit trail, stop
-```
+## Routing-policy
 
-Rules:
+Apply in order; first match wins.
 
-- **Found the cause → stop.** As soon as any area skill produces a recommend backed by evidence of an actual root cause in its zone, the case is done. Do not walk the rest of the list "for completeness". Extra invocations cost a diagnostic pass each and risk noise.
-- **Refute → route per `signal_class`.** Each `hypothesis_refuted` carries a `signal_class`: `clean` advances the existing list; `secondary_backpressure` and `secondary_quoted` may insert new candidates derived from the stack topology and the cited-string map in `signal-table.md`. Treat all three as legitimate advance signals — don't stop early because the next candidate wasn't in the original ranked list.
-- **Step budget: 5 area-skill invocations per session.** Most chains converge in 1–2 hops; the budget is for cases where the symptom is genuinely ambiguous across the stack. After 5 refutes, the case is harder than the catalogue covers — escalate.
-- **Don't shop.** "Try the next skill just in case" is not the contract. Advance only on refute or budget exhaustion.
+1. **Empty findings** → `findings == []`. Take the next `downstream` node from the current expert per [references/topology.md](references/topology.md). For the terminal `opensearch` node, take `upstream` instead. If no neighbour remains in the topology, fall through to step 4.
+2. **Evidence cites an external component** → for any pattern in [references/cited-strings.md](references/cited-strings.md), match it (regex) against `findings[].evidence`. First match → next hop is that pattern's `points_to` node. If the `points_to` node has no expert in this package, escalate to the engineer.
+3. **`raw_diagnostic_pass` cites an external component** → same pattern set, applied to `raw_diagnostic_pass`. Covers the case where the expert surfaced the signal in the diagnostic-pass digest rather than in a structured finding (e.g. when `symptom_id == "unrecognized"`).
+4. **Otherwise** → STOP. The expert's `findings` is the final result; surface it (and any accompanying `recommend`) as the case output.
 
-Advance the chain with `Skill({"skill": "<candidate>"})`. After the call, continue in your own voice, applying that area skill's protocol with the diagnostic pass evidence already in your context.
+The routing-policy never reads the expert's prose narrative. It evaluates the structured fields and the regex patterns only. If a finding has neither evidence nor a recognised pattern, treat it as step 4 (STOP).
 
-**Do not end on a "handoff envelope" message.** Emit a YAML envelope only as an internal note to organise what you carry into each area skill — never as the final user-facing output.
-
-### Internal mental model (what to carry into the area skill)
+## Internal handoff envelope (mental model only)
 
 ```yaml
 triage_l2:
   input_shape: ticket | engineer
-  candidates:             # ranked list, length ≥ 1. Walked top-down by the loop above.
-    - target_skill: fluentbit-troubleshoot | fluentd-troubleshoot | graylog-server-troubleshoot | opensearch-troubleshoot | graylog-disk-usage-investigate
-      signals_matched:
-        - row: <verbatim "Runtime signal observed" cell, OR "downstream-error: <quoted phrase>", OR "fallback-chain: <class>">
-          evidence: |
-            <verbatim command output or quoted log line, trimmed to the relevant lines>
-          prior: high | medium | low
+  candidates:                # ranked, length ≥ 1, walked top-down
+    - target_skill: <one of the *-troubleshoot skills>
+      derived_from: direct_signal | topology_fallback | cited_strings | downstream_neighbour
       confidence: high | medium | low
-  diagnostic_pass:                  # the read-safe snapshot — every command run, its output, abbreviated.
+  diagnostic_pass:           # the read-safe snapshot — every command run, its output, abbreviated
     - command: kubectl get pods -n logging
       output: |
         ...
     - command: curl -sk -u .. https://<graylog>/api/system/journal
       output: |
         ...
-  notes:                  # partial diagnostic pass, unusual customisation observed, engineer constraints.
+  notes:                     # partial diagnostic pass, unusual customisation observed, engineer constraints
 ```
+
+This envelope is an internal scratch pad. It is never the final user-facing output. The final output is either a `recommend` block (from an expert or from `manual-diagnosis`) or an escalation to the engineer.
 
 ## What this skill does not do
 
-- Diagnose root causes. That's the knowledge-area skill.
+- Diagnose root causes. That is the expert skill it invokes.
 - Execute `recommend` actions.
-- Run `read-heavy` queries (large `_search`, full index listings, full log dumps). Those belong inside a knowledge-area skill where they have declared caps.
-- Render a multi-step plan to the engineer up front. Surface one hop at a time — the cluster's actual responses change the next decision.
-- Route to an area that doesn't have a skill in this package yet. If the diagnostic pass clearly points at MongoDB / monitoring / a deployment-time failure, hand back to the engineer with the observation and stop (see signal-table.md "Areas not covered yet").
+- Run `read-heavy` queries. Those belong inside an expert skill where they have declared caps.
+- Render a multi-step plan to the engineer up front. Surface one hop at a time.
+- Route to a node whose `skill` is `null` in topology.md.
