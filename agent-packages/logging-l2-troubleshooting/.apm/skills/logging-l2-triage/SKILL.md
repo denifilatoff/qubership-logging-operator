@@ -1,30 +1,42 @@
 ---
 name: logging-l2-triage
-description: L2 triage for the Qubership logging stack — runs an initial read-safe sweep across the live cluster, identifies the affected knowledge area, and hands off to the right `troubleshoot-*` or `investigate-*` skill. Use whenever an engineer reports a live logging-stack problem (Graylog, OpenSearch, FluentD, FluentBit, log volume, "logs not arriving", "Graylog journal full") — even when the area looks obvious from the description, route through this skill first so the routing decision is grounded in what the cluster actually shows, not just words in a ticket. Also use when an L1 handoff envelope lands with `area: ambiguous` or with a primary area that needs confirmation. Read-only; does not diagnose root causes — that is the downstream skill's job.
+description: L2 triage for the Qubership logging stack — runs an initial read-safe sweep across the live cluster, identifies the affected knowledge area, and invokes the right `troubleshoot-*` or `investigate-*` skill via the Skill tool to continue diagnosis in the same session. Use whenever an engineer reports a live logging-stack problem (Graylog, OpenSearch, FluentD, FluentBit, log volume, "logs not arriving", "Graylog journal full") — even when the area looks obvious from the description, route through this skill first so the routing decision is grounded in what the cluster actually shows, not just words in a ticket. Also use when an L1 handoff envelope lands with `area: ambiguous` or with a primary area that needs confirmation. Read-only; does not diagnose root causes — the area skill you invoke does that.
 ---
 
 # L2 Triage — logging stack
 
-You are the router between the engineer's complaint and the right knowledge-area skill. Your job is to **figure out which area to investigate**, not to investigate it. The downstream `troubleshoot-*` / `investigate-*` skill does the actual diagnosis and proposes the fix.
+You are the router between the engineer's complaint and the right knowledge-area skill. Your job is to **figure out which area to investigate**, then **invoke that area's skill yourself via the `Skill` tool** so the rest of the diagnosis happens in this same session with both skills' guidance in context. You are not a separate agent that hands off to another agent — you load the next skill into your own context and keep going.
 
 Two entry shapes — same flow:
 
 1. **Ticket-driven** — an L1 handoff envelope (affected app, version, deploy params, symptom scope, symptom text, chosen area or `ambiguous`).
 2. **Engineer-driven** — a free-form sentence like "logs from service X disappeared", "Graylog is slow", "who's flooding the disk this time".
 
-The target cluster is already reachable from the current shell (`kubectl`, OpenSearch API, Graylog API, or SSH to the Logging VM — whichever applies to the deployment).
+The target Kubernetes cluster is already reachable from the current shell — `kubectl` works, and the Graylog and OpenSearch HTTP endpoints are reachable (in-cluster Service, port-forward, or an externally exposed route). This skill operates only against K8s. VM-deployed Graylog with on-host `docker` shells and SSH-driven procedures are out of scope (see the methodology's K8s-only invariant). The HTTP/REST APIs of Graylog and OpenSearch are the one exception: their probes work regardless of where the server runs, so they stay in scope here too.
+
+## Prereq discovery (do not ask the engineer)
+
+`kubectl` context is already attached. Discover what you need from the cluster, do not interrupt the session with questions about namespaces, endpoints, or credentials:
+
+- Logging namespace: `kubectl get ns | grep -iE 'logging|graylog|opensearch'`
+- Service endpoints (Graylog, OpenSearch, log-generator): `kubectl get svc -A | grep -iE 'graylog|opensearch|log-generator'`
+- Graylog admin password: `kubectl get secret -n <ns> graylog -o jsonpath='{.data.password}' | base64 -d` (fallback: chart default `admin:admin`)
+- OpenSearch credentials: `kubectl get secret -n <ns> opensearch -o jsonpath='{.data.password}' | base64 -d` (fallback: chart default `admin:admin`)
+- Graylog/OpenSearch HTTP access: `kubectl port-forward -n <ns> svc/<svc> <local>:<remote>` in the background, then `curl http://localhost:<local>/...`
+
+Only if discovery genuinely fails (RBAC denial, missing secret) escalate to the engineer. Never ask for cluster details as your first action — it dead-ends automated sessions and wastes a turn for a human one.
 
 ## Protocol
 
 Read [references/shared-contract.md](references/shared-contract.md) first. Action tiers, read-before-recommend, recommend-block schema. They apply to triage too: do **not** route blind. If the sweep can't be read, escalate to the engineer rather than guessing.
 
-You never run `recommend`-tier actions yourself. You also don't run a knowledge-area's heavy diagnostics — that is what handing off is for. Your scope is the cluster-wide initial sweep below, plus matching against the signal table.
+You never run `recommend`-tier actions yourself. You also don't run a knowledge-area's heavy diagnostics — that is why you invoke the area skill at the end. Your scope is the cluster-wide initial sweep below, plus matching against the signal table.
 
 ## Initial read-safe sweep
 
 This is the same sweep regardless of what the engineer said. It produces concrete observations that decide where to route. Skip individual steps only if the L1 envelope already supplies the equivalent observation — don't re-collect what's already in evidence.
 
-Adapt commands to the deployment shape (Kubernetes vs Logging VM); each section says how.
+All commands below assume Kubernetes plus HTTP access to Graylog and OpenSearch.
 
 ```bash
 # 1. Logging-namespace pod state. Disambiguates collector failures (FluentBit / FluentD)
@@ -44,15 +56,17 @@ curl -sk -u <u>:<p> https://<graylog>/api/system/cluster/nodes
 curl -sk -u <u>:<p> https://<graylog>/api/system/inputstates
 
 # 4. OpenSearch cluster health and disk. RED status / unassigned shards / read-only flags
-#    each route to troubleshoot-opensearch with high prior.
+#    each route to opensearch-troubleshoot with high prior.
 curl -sk -u <u>:<p> https://<os-host>:9200/_cluster/health?pretty
 curl -sk -u <u>:<p> https://<os-host>:9200/_cat/allocation?v
 curl -sk -u <u>:<p> 'https://<os-host>:9200/_cat/indices?v&s=store.size:desc' | head -20
 
-# 5. Disk pressure. On VM deployments, df -h on the Graylog host is the canonical probe
-#    for "HDD Full". On K8s, look at the PVC or the node.
-ssh <graylog-vm> df -h                                     # VM deployment
-kubectl -n <ns> describe pvc <graylog-pvc>                 # K8s deployment
+# 5. Disk pressure. Look at the PVC backing Graylog/OpenSearch and node-level disk
+#    pressure conditions. OpenSearch's own /_cat/allocation (step 4) is the most
+#    informative probe for the cluster-side view.
+kubectl -n <ns> get pvc
+kubectl -n <ns> describe pvc <graylog-pvc>
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}: {.status.conditions[?(@.type=="DiskPressure")].status}{"\n"}{end}'
 
 # 6. Operator / Helm state. A LoggingService in a bad reconcile state, or a Helm release
 #    in failed/pending state, redirects to the deployment area (not yet covered by a
@@ -61,11 +75,7 @@ kubectl get loggingservice -A
 helm list -A | grep -i log
 ```
 
-What "deployment shape" means in step 3–5:
-
-- **Kubernetes** — Graylog and OpenSearch run as pods, reachable through Services or port-forward; `<graylog>` and `<os-host>` resolve in-cluster.
-- **Logging VM (Docker)** — `<graylog>` is the VM's hostname or vIP; `<os-host>` is the same VM on port 9200 (storage container).
-- Confirm which shape the engineer is on before running anything. The L1 envelope's `Deploy parameters` field usually says.
+Endpoints in step 3–4: `<graylog>` and `<os-host>` resolve in-cluster (Service / port-forward) or via an externally exposed route — whichever the engineer's shell has set up. Confirm credentials and reachability before issuing any HTTP probe.
 
 Capture each command's actual output — those strings are your `evidence` for the handoff.
 
@@ -75,21 +85,25 @@ Match the observations against [references/signal-table.md](references/signal-ta
 
 Decision rules (also in the signal table):
 
-- **One row fires** → that's the target skill. Hand off (schema below).
+- **One row fires** → that's the target skill. Invoke it (see "Final action" below).
 - **Multiple rows, same target** → still that target; case is over-determined, raise confidence.
-- **Multiple rows, different targets** → rank by `match strength × prior`. Primary = top; the rest become refutation successors.
+- **Multiple rows, different targets** → rank by `match strength × prior`. Primary = top; the rest are refutation successors to try if primary refutes.
 - **No row fires** after a complete sweep → emit a `recommend` for manual diagnosis with the full sweep attached, and stop. Do not route to "the closest skill".
 - **Sweep partially blocked** (RBAC, endpoint down) → escalate to the engineer; do not route blind.
 
-## Handoff output
+## Final action — invoke the area skill
 
-Emit exactly this shape, then stop. Do not invoke the downstream skill yourself — the engineer (or the runtime, depending on the agent) does that, with this artefact as the input.
+Your final tool call is `Skill({"skill": "<target>"})` for the primary target you picked. That loads the area skill's guidance into this same session — there is no separate agent and no return event. After the call, continue the conversation in your own voice, applying the area skill's protocol with the sweep evidence already in your context.
+
+**Do not end on a "handoff envelope" message.** Emitting a YAML envelope and stopping leaves the engineer with raw triage data and no diagnosis. The envelope below is an internal mental model — useful for organising what you carry into the next skill, never the final user-facing output.
+
+### Internal mental model (what to carry into the area skill)
 
 ```yaml
 triage_l2:
   input_shape: ticket | engineer
   primary:
-    target_skill: troubleshoot-fluentbit | troubleshoot-fluentd | troubleshoot-graylog-server | troubleshoot-opensearch | investigate-graylog-disk-usage
+    target_skill: fluentbit-troubleshoot | fluentd-troubleshoot | graylog-server-troubleshoot | opensearch-troubleshoot | graylog-disk-usage-investigate
     signals_matched:
       - row: <verbatim "Runtime signal observed" cell from signal-table.md>
         evidence: |
@@ -107,19 +121,21 @@ triage_l2:
     - command: curl -sk -u .. https://<graylog>/api/system/journal
       output: |
         ...
-  notes:                  # anything the downstream skill should know — partial sweep,
+  notes:                  # anything the area skill needs to know — partial sweep,
                           # unusual customisation observed, engineer's stated constraints.
 ```
 
-## After the downstream skill returns
+## If the area skill refutes the hypothesis
 
-The knowledge-area skill returns one of:
+You stay in the same session, so there is no literal "return". Treat one of these as a refutation signal in the area skill's reasoning:
 
-- `resolved` — emit the recommendation chain it produced, append the audit trail (sweep + downstream's snapshots + every emitted `recommend` and its disposition), stop.
-- `hypothesis_refuted` — go back to the alternatives list. Pick the next refutation successor. If empty, recompute against the signal table with the new evidence in hand.
-- `new_symptom` — recompute from Step 3 of the methodology decision flow: re-match the signal table with the additional evidence.
+- The area skill reaches a recommend block whose evidence contradicts the routing signals.
+- Its own read-safe sweep surfaces a different area's signals.
+- It explicitly states the symptom doesn't match its catalogue.
 
-Step budget: **5 outer-graph hops**. If you've handed off five times without `resolved`, escalate to a human with the accumulated audit trail. Spinning is worse than admitting the case is harder than the table covers.
+When that happens: invoke the next-best target from `alternatives` via `Skill({"skill": "<next>"})`. If the alternatives list is empty, re-run a fresh match against the signal table with the additional evidence in hand and invoke the resulting skill.
+
+Step budget: **5 area-skill invocations per session**. If you've called five area skills without converging, emit a `recommend` for manual diagnosis with the full audit trail (sweep + every invoked skill's findings) and stop. Spinning is worse than admitting the case is harder than the table covers.
 
 ## What this skill does not do
 
