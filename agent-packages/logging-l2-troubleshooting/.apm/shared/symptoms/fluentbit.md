@@ -1,97 +1,75 @@
-# FluentBit — Troubleshooting
+# FluentBit — symptom catalogue
 
-## Connection timeout to Graylog in FluentBit
+## Connection timeout to Graylog
 
-**Symptoms:**
-
-The following errors in FluentBit pod logs appears:
-
-```bash
-[2024/04/25 20:54:28] [error] [upstream] connection #-1 to tcp://unavailable:0 timed out after 10 seconds (connection timeout)
-[2024/04/25 20:54:29] [ warn] [net] getaddrinfo(host='<graylog_url>', err=12): Timeout while contacting DNS servers
-[2024/04/25 20:54:29] [error] [output:gelf:gelf.1] no upstream connections available
+```yaml
+id: connection-timeout-graylog
+match:
+  log_grep:
+    target: fluentbit
+    pattern: 'connection #-?\d+ to tcp://.*timed out|getaddrinfo\(.*err=\d+\):\s*Timeout|no upstream connections available'
+evidence_template: |
+  Quote the matching log lines verbatim. Include the FluentBit pod's CPU
+  request/limit (`kubectl get pod -o jsonpath='{.spec.containers[*].resources}'`)
+  and the relevant stanzas of the `logging-fluentbit` ConfigMap
+  (`fluent-bit.conf` SERVICE section, `output-graylog.conf` OUTPUT section).
+proposed_fix: |
+  1. Raise `fluentbit.resources.limits.cpu` to "1" if currently lower —
+     the error usually appears when FluentBit hits its CPU limit.
+  2. Add health-check and network tuning to the `logging-fluentbit` ConfigMap:
+     - SERVICE: `HC_Errors_Count 5`, `HC_Retry_Failure_Count 5`, `HC_Period 5`.
+     - OUTPUT gelf: `net.connect_timeout 20s`, `net.max_worker_connections 35`,
+       `net.dns.mode TCP`, `net.dns.resolver LEGACY`.
+  3. Manually delete all `logging-fluentbit-*` pods to apply the new ConfigMap.
 ```
-
-**How to fix:**
-
-1. Check CPU consumption by FluentBit. Usually the error appears when FluentBit
-faced limit of CPU. Increase limit by setting `fluentbit.resources.limits.cpu: "1"`.
-
-2. Add the configuration of network and health checks to FluentBit. ConfigMap `logging-fluentbit` should contain
-next parameters:
-
-    ```yaml
-      fluent-bit.conf: |
-        [SERVICE]
-            Flush         5
-            HC_Errors_Count 5
-            HC_Retry_Failure_Count 5
-            HC_Period 5
-      output-graylog.conf: |
-        [OUTPUT]
-            Name     gelf
-            # configuration...
-            net.connect_timeout 20s
-            net.max_worker_connections 35
-            net.dns.mode TCP
-            net.dns.resolver LEGACY
-    ```
-
-3. After updating ConfigMap you should manually delete all FluentBit pods to apply changes.
 
 ## FluentBit stuck and stopped sending logs to Graylog
 
-**Symptoms:**
+```yaml
+id: fluentbit-stuck-no-output
+match:
+  manual_review: true
+evidence_template: |
+  Capture FluentBit input/output metrics (`curl http://localhost:2020/api/v1/metrics`
+  from inside the pod) showing inputs receiving records but the gelf output
+  emitting zero. Quote the last log lines from the pod and the current
+  `filter-log-parser.conf` and `output-graylog.conf` stanzas of the
+  `logging-fluentbit` ConfigMap.
+proposed_fix: |
+  First, verify the cluster is on the latest Logging release; this is a known
+  upstream FluentBit issue and the operator's newer templates fix it.
 
-FluentBit stuck and do not send any logs.
+  Temporary manual workaround:
+  1. Scale `logging-operator` down so it does not revert ConfigMap edits:
+     `kubectl scale -n <ns> deployment logging-operator --replicas=0`.
+  2. Edit `kubectl edit -n <ns> cm logging-fluentbit`:
+     - In `filter-log-parser.conf`, remove the trailing
+       `[FILTER] Name rewrite_tag … Emitter_Mem_Buf_Limit 10M` block.
+     - In `output-graylog.conf`, replace `Match   parsed.**` with
+       `Match_Regex (raw|parsed).**`.
+  3. Delete all `logging-fluentbit-*` pods so they restart with the new config.
+  4. Once stable, scale `logging-operator` back up — but expect it to revert
+     these edits on the next reconcile; upgrade is the only durable fix.
+```
 
-**How to fix:**
+## Fluent container restarts after ConfigMap edit
 
-First of all, check that you upgraded to the latest version of Logging.
-If you want to solve problem manually, follow steps below (it is temporary solution):
-
-1. Make sure that you are connected to the Cloud. Scale `logging-operator` deployment to 0 replicas with the
-   command:
-
-   ```bash
-   kubectl scale -n logging deployment logging-operator --replicas=1
-   ```
-
-2. Modify ConfigMap `logging-fluentbit`:
-
-   ```bash
-   kubectl edit -n logging cm logging-fluentbit
-   ```
-
-   1. Remove from `filter-log-parser.conf` the last lines:
-
-      ```yaml
-      [FILTER]
-          Name          rewrite_tag
-          Match         raw.*
-          Rule          $log .*  parsed.$TAG false
-          Emitter_Name          raw_parsed
-          Emitter_Storage.type  filesystem
-          Emitter_Mem_Buf_Limit 10M
-      ```
-
-   2. Change in `output-graylog.conf` the line from
-
-      ```yaml
-      Match   parsed.**
-      ```
-
-      to
-
-      ```yaml
-      Match_Regex (raw|parsed).**
-      ```
-
-3. The last step is to delete all pods `logging-fluentbit-*`. The pods will be restarted with the last configuration.
-
-## Fluent container restarts after changing ConfigMap
-
-Cross-cutting with FluentD — same `configmap-reloader` sidecar watches both DaemonSets. When the FluentBit or FluentD
-ConfigMap is edited, the reloader signals the container to reload (or, if reload fails, restart). Repeated restarts
-right after a ConfigMap edit point at a parse / syntax error in the new content — inspect the most recent
-`kubectl logs` of the affected pod for the parser-side error message and revert the offending ConfigMap edit.
+```yaml
+id: fluent-configmap-parse-error
+match:
+  log_grep:
+    target: fluentbit
+    pattern: 'parse_error|ConfigParseError|unmatched end tag|Invalid (config|indentation)'
+  k8s_state:
+    pod_state: CrashLoopBackOff
+evidence_template: |
+  Quote the most recent `kubectl logs` from the restarting pod showing the
+  parser-side error (file name and line/column). Include the offending
+  fragment of the `logging-fluentbit` ConfigMap.
+proposed_fix: |
+  The `configmap-reloader` sidecar restarts the container on every ConfigMap
+  edit. Repeated restarts right after an edit point at a syntax error in the
+  new content. Revert the offending ConfigMap change (or fix the syntax
+  flagged in the parser error) and let the reloader pick up the corrected
+  config on its next poll.
+```
