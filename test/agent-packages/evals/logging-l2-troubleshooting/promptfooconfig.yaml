@@ -45,16 +45,38 @@ tests:
         # Multi-line transforms are wrapped in `function(output, context) {...}`
         # by promptfoo, so we need an explicit `return`. Single-expression
         # transforms can omit it, but the multi-line form requires it.
+        #
+        # `assistantMessages` carries every intermediate assistant text so
+        # the judge can inspect refute / recommend YAML blocks emitted by
+        # area skills mid-chain (Skill tool loads context, doesn't return a
+        # value, so those blocks live in the agent's own messages between
+        # Skill calls). `result` is only the final message.
         transform: |
+          const md = (context && context.metadata) || {};
+          const messages = md.messages || md.transcript || [];
+          const assistantTexts = messages
+            .filter(m => m && m.role === 'assistant')
+            .map(m => {
+              if (typeof m.content === 'string') return m.content;
+              if (Array.isArray(m.content)) {
+                return m.content
+                  .filter(b => b && b.type === 'text')
+                  .map(b => b.text)
+                  .join('\n');
+              }
+              return JSON.stringify(m.content);
+            })
+            .filter(s => s && s.length > 0);
           return JSON.stringify({
             result: typeof output === 'string' ? output : JSON.stringify(output),
-            toolCalls: (context && context.metadata && context.metadata.toolCalls) || []
-          }, null, 2)
+            assistantMessages: assistantTexts,
+            toolCalls: md.toolCalls || []
+          }, null, 2);
         provider:
           id: anthropic:claude-agent-sdk
-          label: judge-claude-code-opus-4-7
+          label: judge-claude-sonnet-4-6
           config:
-            model: claude-opus-4-7
+            model: claude-sonnet-4-6
             apiKeyRequired: false
             custom_allowed_tools: []
         # Renamed from .md to .txt: promptfoo's processFileReference (used

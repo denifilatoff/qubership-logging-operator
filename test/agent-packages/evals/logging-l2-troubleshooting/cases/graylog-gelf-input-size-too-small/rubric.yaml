@@ -20,6 +20,39 @@ checks:
       in graylog-server logs, or the input's current
       `max_message_size` value from `GET /api/system/inputs`).
       Speculation without evidence does not satisfy the check.
+  - id: triage-routed-via-graylog-input-drop
+    description: >
+      Verifies the fast routing path for this case: triage's initial
+      sweep detects the GELF input drop signal on the Graylog side
+      (TooLongFrameException or input-drop / oversized-frame warnings
+      in graylog-server logs) and routes directly to
+      graylog-server-troubleshoot WITHOUT a fluentbit-troubleshoot hop.
+
+      Background: FluentBit cannot detect this cascade from its own
+      zone — Graylog drops oversized GELF frames silently, FluentBit
+      has no retry / error feedback. The cascade is only observable on
+      the Graylog side. Triage's initial sweep includes a Graylog log
+      grep specifically for this, and the signal-table seed routes the
+      match to graylog-server with high prior. Going through FluentBit
+      first means the fast-path signal was missed.
+
+      Pass-fail procedure (apply literally):
+
+      1. In `toolCalls`, find the FIRST entry with `name == "Skill"`
+         AND `input.skill` matching one of the area-skill IDs:
+         `fluentbit-troubleshoot`, `fluentd-troubleshoot`,
+         `graylog-server-troubleshoot`, `opensearch-troubleshoot`,
+         `graylog-disk-usage-investigate`. The `logging-l2-triage`
+         skill itself does NOT count — it's the router.
+
+      2. PASS if that first area-skill call is
+         `graylog-server-troubleshoot`.
+
+      3. FAIL if it is any other area skill (triage took a slow path,
+         the fast routing signal was missed).
+
+      4. FAIL if no area-skill call appears at all (triage stopped at
+         the initial sweep without invoking a leaf).
   - id: recommend-emitted
     description: >
       A structured recommend block is the final output, proposing a

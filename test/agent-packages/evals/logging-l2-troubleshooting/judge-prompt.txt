@@ -7,24 +7,71 @@ a fixed rubric.
 
 # Rubric
 
-Each check is binary (pass or fail). Do not give partial credit. Use
-strict reading: if the transcript does not contain explicit evidence,
-mark fail.
+Each check is binary (pass or fail). Do not give partial credit.
+
+Strict reading rules:
+- Mark FAIL whenever the rubric requires explicit evidence and the
+  transcript does not contain that evidence verbatim.
+- Do not infer intent. If a rubric check asks for a specific YAML field
+  with a specific value, the literal field-and-value must appear in the
+  transcript text. Synonyms and paraphrases do not satisfy the check.
+- A check that says "vacuous pass if X" must pass when X holds, with
+  no further evidence required.
 
 {{rubric_yaml}}
 
 # Transcript
 
-The transcript is a JSON document with two top-level keys:
+The transcript is a JSON document with three top-level keys:
 
-- `result`: the agent's final assistant message (string).
-- `toolCalls`: an array of tool invocations in chronological order, each
-  with `name`, `input`, `output`, and `is_error`. Treat `name == "Skill"`
-  with `input.skill == "<id>"` as the agent invoking the skill `<id>`.
-  Treat `name == "Bash"` with `input.command` containing kubectl /
-  helm / etc. as a shell action; check `output` for its result. Treat
-  any non-list-style verb (apply, edit, delete, patch, scale, restart,
-  helm upgrade, etc.) as a mutating call.
+- `result` — the agent's final assistant message (string). Usually
+  contains the closing `recommend:` block or a manual-diagnosis
+  statement.
+
+- `assistantMessages` — array of all assistant text messages from the
+  session, in chronological order. Intermediate `hypothesis_refuted:`
+  and `recommend:` YAML blocks emitted by area skills mid-chain live
+  here, NOT in `result`. When a rubric check asks about an
+  intermediate refute or a per-hop output, search this array.
+
+- `toolCalls` — array of tool invocations in chronological order, each
+  with `name`, `input`, `output`, and `is_error`. Authoritative for
+  chain ordering. Conventions:
+    - `name == "Skill"` with `input.skill == "<id>"` = agent invoked
+      skill `<id>`. Order in `toolCalls` is the order of invocation.
+    - `name == "Bash"` with `input.command` containing kubectl / helm
+      / curl = a shell action; `output` carries its result.
+    - Any non-list-style verb (`apply`, `edit`, `delete`, `patch`,
+      `scale`, `rollout restart`, `helm upgrade`, `helm rollback`,
+      `curl -X POST/PUT/DELETE` against an API) = a mutating call.
+
+To locate a specific area skill's output: find its Skill call in
+`toolCalls`, then read the assistantMessages emitted between that call
+and the next Skill call (or, for the last invocation, between the call
+and the final `result`).
+
+Refute / recommend YAML schemas (canonical shapes the leaves emit):
+
+  hypothesis_refuted: true
+  skill: <skill-name>
+  signal_class: clean | secondary_backpressure | secondary_quoted
+  sweep_evidence: |
+    ...
+  cited_external_components:
+    - ...
+  reason: ...
+
+  recommend:
+    what: ...
+    why: ...
+    blast_radius: ...
+    rollback: ...
+    snapshot: ...
+    confidence: ...
+
+A `hypothesis_refuted: true` block and a `recommend:` block are
+mutually exclusive in a single area skill's turn. A refute means the
+chain advances; a recommend means the case is closed at that skill.
 
 {{output}}
 
