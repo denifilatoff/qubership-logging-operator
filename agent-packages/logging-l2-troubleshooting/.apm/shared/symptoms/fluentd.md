@@ -14,7 +14,9 @@ evidence_template: |
   Quote the `Worker N exited unexpectedly with signal SIGKILL` line and the
   following `#N init workers logger` restart line. Include the pod's memory
   limit and (if available) the node `dmesg` line showing OOM for the `ruby`
-  process.
+  process. Also check host-side disk IO on the FluentD pod's node — sustained
+  read throughput / IOPS is a common visible consequence (the worker rewinds
+  buffers from disk before being killed).
 proposed_fix: |
   Root cause: the FluentD container runs a supervisor plus two worker ruby
   processes (#0 and #1). Worker #1 carries the output buffer (hardcoded
@@ -25,24 +27,10 @@ proposed_fix: |
   1. Raise the FluentD memory limit to ~1500Mi or 2Gi; or
   2. Lower the gelf store's `<buffer> total_limit_size` to e.g. 512Mb so the
      buffer fits inside the existing limit.
-```
 
-## FluentD high DiskIO read load
-
-```yaml
-id: fluentd-high-diskio-read
-match:
-  log_grep:
-    target: fluentd
-    pattern: 'Worker \d+ exited unexpectedly with signal SIGKILL'
-evidence_template: |
-  Quote the SIGKILL + restart log pair, and reference node-level disk IO
-  metrics (read throughput / IOPS) on the FluentD pod's host node.
-proposed_fix: |
-  Same root cause as `fluentd-worker-sigkill-oom` — after each OOM restart
-  the worker reloads its buffer from disk, generating heavy read IO. Apply
-  the fix for `fluentd-worker-sigkill-oom` (memory limit increase or
-  buffer-size decrease).
+  Note: if you also see sustained DiskIO read load on the node hosting the
+  FluentD pod, that's the same root cause (memory pressure causing buffer
+  rewinds) — the fixes above resolve it too.
 ```
 
 ## FluentD failed to flush buffer (data too big, GELF UDP)
@@ -76,7 +64,7 @@ proposed_fix: |
 ## Fluent container restarts after ConfigMap edit
 
 ```yaml
-id: fluent-configmap-parse-error
+id: fluentd-configmap-parse-error
 match:
   log_grep:
     target: fluentd

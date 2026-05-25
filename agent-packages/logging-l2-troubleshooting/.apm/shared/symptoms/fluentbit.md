@@ -3,11 +3,11 @@
 ## Connection timeout to Graylog
 
 ```yaml
-id: connection-timeout-graylog
+id: fluentbit-connection-timeout-graylog
 match:
   log_grep:
     target: fluentbit
-    pattern: 'connection #-?\d+ to tcp://.*timed out|getaddrinfo\(.*err=\d+\):\s*Timeout|no upstream connections available'
+    pattern: 'connection #-?\d+ to tcp://.*timed out|getaddrinfo.*(Timeout|Name or service not known|nodename nor servname)|no upstream connections available'
 evidence_template: |
   Quote the matching log lines verbatim. Include the FluentBit pod's CPU
   request/limit (`kubectl get pod -o jsonpath='{.spec.containers[*].resources}'`)
@@ -55,7 +55,7 @@ proposed_fix: |
 ## Fluent container restarts after ConfigMap edit
 
 ```yaml
-id: fluent-configmap-parse-error
+id: fluentbit-configmap-parse-error
 match:
   log_grep:
     target: fluentbit

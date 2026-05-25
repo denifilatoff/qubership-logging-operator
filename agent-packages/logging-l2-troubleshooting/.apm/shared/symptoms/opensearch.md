@@ -123,7 +123,7 @@ id: opensearch-index-read-only
 match:
   log_grep:
     target: graylog
-    pattern: 'index .* is read-only|index .* blocks read-only_allow_delete'
+    pattern: 'index .* is read-only|index .* blocks read-only_allow_delete|cluster_block_exception|FORBIDDEN/12/index read-only'
   api_check:
     path: /<index_name>/_settings
     expects: '"index.blocks.read_only_allow_delete":"true"'
