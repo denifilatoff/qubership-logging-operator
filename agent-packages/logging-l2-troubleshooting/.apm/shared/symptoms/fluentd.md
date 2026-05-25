@@ -95,10 +95,10 @@ There was FluentD [issue](https://github.com/fluent/fluentd/issues/3651) on GitH
 
 To send logs to Graylog we use output plugin [`fluent-plugin-gelf-hs`](https://github.com/hotschedules/fluent-plugin-gelf-hs)
 that uses Ruby module [`gelf-rb`](https://github.com/graylog-labs/gelf-rb).
-The gelf-hs library creates the Notifier from the `gelf` using the "WAN" network type [see source code](
-https://github.com/hotschedules/fluent-plugin-gelf-hs/blob/master/lib/fluent/plugin/out_gelf.rb#L52).
-It means that the `max chunk size` should be set as `1420 (bytes)` [see source code](
-https://github.com/graylog-labs/gelf-rb/blob/master/lib/gelf/notifier.rb#L57-L67).
+The gelf-hs library creates the Notifier from the `gelf` using the "WAN" network type
+([see source code](https://github.com/hotschedules/fluent-plugin-gelf-hs/blob/master/lib/fluent/plugin/out_gelf.rb#L52)).
+It means that the `max chunk size` should be set as `1420 (bytes)`
+([see source code](https://github.com/graylog-labs/gelf-rb/blob/master/lib/gelf/notifier.rb#L57-L67)).
 
 According to GELF specification and validation, we should not separate data into more than 128 chunks.
 It seems the max data size for GELF UDP that can be sent is:

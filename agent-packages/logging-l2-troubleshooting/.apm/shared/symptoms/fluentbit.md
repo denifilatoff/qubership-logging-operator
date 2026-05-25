@@ -91,4 +91,7 @@ If you want to solve problem manually, follow steps below (it is temporary solut
 
 ## Fluent container restarts after changing ConfigMap
 
-Cross-cutting with FluentD — same reloader. See [FluentD — ConfigMap reload](fluentd.md#fluent-container-restarts-after-changing-configmap).
+Cross-cutting with FluentD — same `configmap-reloader` sidecar watches both DaemonSets. When the FluentBit or FluentD
+ConfigMap is edited, the reloader signals the container to reload (or, if reload fails, restart). Repeated restarts
+right after a ConfigMap edit point at a parse / syntax error in the new content — inspect the most recent
+`kubectl logs` of the affected pod for the parser-side error message and revert the offending ConfigMap edit.

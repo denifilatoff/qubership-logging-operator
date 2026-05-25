@@ -24,8 +24,6 @@ Graylog. The HTTP API at `https://<graylog>/api/...` is the canonical reachabili
 
 To check for errors, navigate to the **System > Overview** tab.
 
-![graylog-system-overview](../images/graylog/system-overview.png)
-
 Navigate to the deployed FluentD (usually it is the "logging" project), and see the pods' health-check reports.
 
 ### Ingress/Route to Graylog cyclic redirect
@@ -272,20 +270,15 @@ but this will not change the time inside the `message` field  (it will be equal 
 
 ### Information about OpenSearch nodes is unavailable
 
-If you log in to Graylog UI, go to `System -> Nodes` and see that info about Elastic nodes is unavailable:
-
-![Node info is unavailable](../images/graylog/wrong-certificate-nodes-info.png)
-
-Then, if you click on the node's name (`44a226cb/graylog-0` from the example above), you'll probably face an error like
-this:
-
-![Unavailable node details](../images/graylog/wrong-certificate-details.png)
+If you log in to Graylog UI, go to `System -> Nodes` and see that info about Elastic nodes is unavailable. If you click
+on the node's name (e.g. `44a226cb/graylog-0`), you'll typically face a TLS / certificate error in the node-details
+panel.
 
 In this case, you should check that your Graylog's TLS certificate is not expired and contains valid alt names (e.g.
 it must contain `graylog-service.logging.svc` if your Graylog is deployed into the `logging` namespace in the Cloud).
 
-If you use a self-signed certificate,
-[the article about certificate generation](../user-guides/tls.md#self-signed-certificate-generation) can be useful for you.
+If you use a self-signed certificate, regenerate it following the Qubership platform's TLS / certificate procedure for
+Graylog (self-signed certificate generation, alt-name configuration).
 
 ### Widgets do not show data with errors
 
