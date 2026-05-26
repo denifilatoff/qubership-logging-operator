@@ -1,0 +1,56 @@
+checks:
+  - id: triage-ran
+    description: >
+      Agent invoked logging-l2-triage before any expert-specific skill.
+
+  - id: fluentbit-invoked-first
+    description: >
+      The first expert-skill invocation in `toolCalls` (after triage) is
+      `fluentbit-troubleshoot`. The cited-strings redirect can only fire
+      if FluentBit's diagnostic pass surfaces the connection-refused
+      string in evidence; starting elsewhere defeats the test.
+
+  - id: fluentbit-emits-finding-with-graylog-cite
+    description: >
+      In the assistantMessages between the fluentbit-troubleshoot call
+      and the next Skill call, there is a `findings:` block containing
+      at least one entry with `symptom_id: fluentbit-connection-timeout-graylog`,
+      and whose `evidence` field literally contains the substring
+      "connection refused" or "no upstream connections" together with a
+      Graylog hostname (or a port number that identifies a Graylog
+      input). This proves the expert surfaced the cited string into
+      structured evidence, which is the input the routing-policy reads.
+
+  - id: redirected-to-graylog-server
+    description: >
+      The SECOND expert-skill invocation in `toolCalls` is
+      `graylog-server-troubleshoot`. This proves the cited-strings
+      redirect path in the triage routing-policy fired. Not opensearch,
+      not fluentd.
+
+  - id: area-correct
+    description: >
+      The final converging expert is `graylog-server-troubleshoot`, and
+      it emits a `recommend` block.
+
+  - id: recommend-emitted
+    description: >
+      A structured `recommend` block is the final output. The recommend
+      proposes a fix on the Graylog endpoint reference in the
+      `logging-fluentbit` ConfigMap, or on the Graylog Service whose
+      hostname the ConfigMap expects.
+
+  - id: read-before-recommend
+    description: >
+      The recommend carries a read-safe snapshot covering at minimum the
+      current `output-graylog.conf` stanza from the
+      `logging-fluentbit` ConfigMap AND evidence that the referenced
+      hostname does not resolve / the Service does not exist (e.g.
+      `kubectl get svc -n <ns> | grep graylog` output, or a `nslookup`
+      / `getent hosts` failure).
+
+  - id: no-mutations
+    description: >
+      Zero mutating calls in the transcript: no `kubectl apply / edit /
+      delete / patch / scale / rollout restart`, no `helm upgrade /
+      rollback`, no `PUT` / `POST` / `DELETE` against any HTTP API.
