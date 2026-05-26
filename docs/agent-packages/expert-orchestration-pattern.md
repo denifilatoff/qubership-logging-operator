@@ -107,4 +107,53 @@ Edit `references/topology.md`. Replace, add, or remove nodes; update `downstream
 
 ## Validation
 
-This pattern was first instantiated in `agent-packages/logging-l2-troubleshooting`. Validation results — pre-refactor baseline vs post-refactor sweep, mean scores per case, cost comparison — to be filled in after the post-refactor eval sweep completes.
+The pattern was first instantiated in `agent-packages/logging-l2-troubleshooting`. Measured against the pre-refactor baseline run `20260525T205355Z` (mean 0.867 across 6 cases) on a kind cluster with `BACKEND=graylog`.
+
+### Post-refactor scores (run `20260526T063013Z`, REPEATS=3)
+
+| Case | Baseline | Post-refactor | Δ |
+|---|---|---|---|
+| fluentbit-config-syntax | 0.97 | 0.86 | -0.11 |
+| fluentbit-cpu-throttle | 0.78 | 0.81 | +0.03 |
+| fluentbit-oom | 0.93 | 1.00 | +0.07 |
+| graylog-gelf-input-size-too-small | 0.88 | 0.90 | +0.02 |
+| opensearch-flood-stage-readonly | 0.86 | 0.86 | 0.00 |
+| operator-helm-bad-image | 0.78 | 0.86 | +0.08 |
+| **Mean (6 existing cases)** | **0.867** | **0.882** | **+0.015** |
+| fluentbit-graylog-connection-refused (new) | — | 0.77 | — |
+
+Per-run cost: baseline `$0.215/run` vs post-refactor `$0.202/run` (slightly cheaper). Total `$8.50` across 42 runs (vs baseline `$7.73` across 36 runs).
+
+### Pass-criteria check
+
+| Criterion | Target | Result | Status |
+|---|---|---|---|
+| Mean across 6 baseline cases | ≥ 0.817 | 0.882 | ✓ |
+| fluentbit-oom | ≥ 0.85 | 1.00 | ✓ |
+| graylog-gelf-input-size-too-small | ≥ 0.85 | 0.90 | ✓ |
+| opensearch-flood-stage-readonly | ≥ 0.80 | 0.86 | ✓ |
+| New synthetic cited-strings case | ≥ 0.80 | 0.77 | ✗ (-0.03) |
+| Per-run cost ≤ baseline | ≤ $0.215 | $0.202 | ✓ |
+
+### Behavioural observations from the post-refactor sweep
+
+- **The orchestrator takes the shortest correct path.** When the cluster-wide initial diagnostic pass directly surfaces the failing zone (e.g. graylog StatefulSet at zero replicas, visible in `kubectl get statefulset` and in the `LoggingService` CR), the orchestrator routes straight to the relevant expert without walking through upstream zones. This is correct optimising behaviour, but it means the cited-strings cascade path is only exercised when the downstream issue is observable only inside an upstream expert's evidence — not when triage's own pass can see it directly.
+- **Structured YAML emission is reliable but not perfect.** Experts emit the `findings:` and `recommend:` blocks the contract requires in most cases, but occasionally degrade into prose-formatted "## Findings" / "## Recommendation" sections. The instruction in expert SKILL.md sections "Lookup and output" was tightened (commit `295baff`) to require the YAML block first, which improved compliance on subsequent runs.
+- **Symptom_id discipline is imperfect.** Experts sometimes emit invented `symptom_id` values (e.g. `fluentbit_config_parse_failure_undefined_parsers`) instead of the canonical id from `references/symptoms.md` (e.g. `fluentbit-configmap-parse-error`). This does not affect routing correctness — routing-policy operates on `findings == []`, `evidence` regex, and `raw_diagnostic_pass` regex — but it weakens the catalogue as a shared reference and breaks rubric checks that grep for canonical ids.
+
+### Why one criterion missed
+
+The new synthetic case `fluentbit-graylog-connection-refused` was designed to exercise the cited-strings cascade path. Two scenario shapes were tried:
+
+1. **FluentBit ConfigMap mutation (initial design)** — pointed FluentBit at a non-existent Graylog hostname. The fluentbit expert correctly diagnosed the misconfigured ConfigMap and fixed it locally, without cascading. Score 0.77: rubric expected cited-strings cascade routing; agent took the more efficient self-fix path. This is correct behaviour — bad hostname in a collector's own ConfigMap is a collector-zone fix.
+
+2. **Graylog StatefulSet scaled to zero (revised design)** — kept FluentBit's config correct; broke graylog downstream. Triage's initial diagnostic pass immediately surfaced `graylog StatefulSet 0/0 replicas` and routed directly to `graylog-server-troubleshoot`, skipping the fluentbit hop entirely. Score 0.625: again a shorter correct path than the rubric expected. The orchestrator's optimising shortcut is, in real-world terms, the right call.
+
+A proper cited-strings cascade test needs a downstream failure that is **not** visible from the triage initial pass — e.g. graylog pods running healthy but rejecting GELF frames via a NetworkPolicy, or via an input-port mismatch invisible without entering the graylog zone. That fixture has not yet been written.
+
+### Conclusion
+
+The refactor delivers its architectural goals: light schema is emitted, topology and cited-strings live in reference files, the orchestrator routes on structured fields without prose comprehension, cost is comparable to baseline, and the mean score improved by 0.015. Two follow-ups remain (see `docs/agent-packages/expert-orchestration-followups.md`):
+
+1. **Symptom_id catalogue discipline** — improve expert prompts so experts use canonical ids from `references/symptoms.md` verbatim instead of inventing descriptive ids.
+2. **Cited-strings cascade test fixture** — design a synthetic scenario that hides the downstream failure from triage's initial pass so the cascade path is actually exercised.
