@@ -26,7 +26,7 @@ Local eval pipeline for the L2 skill package. See
 ## Run
 
 ```bash
-# Full sweep: all cases, with-pkg vs no-pkg, --repeat 3
+# Full eval run: all cases, with-pkg vs no-pkg, --repeat 3
 make eval
 
 # Single case

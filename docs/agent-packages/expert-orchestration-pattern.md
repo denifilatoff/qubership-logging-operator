@@ -135,7 +135,7 @@ Per-run cost: baseline `$0.215/run` vs post-refactor `$0.202/run` (slightly chea
 | New synthetic cited-strings case | ≥ 0.80 | 0.77 | ✗ (-0.03) |
 | Per-run cost ≤ baseline | ≤ $0.215 | $0.202 | ✓ |
 
-### Behavioural observations from the post-refactor sweep
+### Behavioural observations from the post-refactor eval run
 
 - **The orchestrator takes the shortest correct path.** When the cluster-wide initial diagnostic pass directly surfaces the failing zone (e.g. graylog StatefulSet at zero replicas, visible in `kubectl get statefulset` and in the `LoggingService` CR), the orchestrator routes straight to the relevant expert without walking through upstream zones. This is correct optimising behaviour, but it means the cited-strings cascade path is only exercised when the downstream issue is observable only inside an upstream expert's evidence — not when triage's own pass can see it directly.
 - **Structured YAML emission is reliable but not perfect.** Experts emit the `findings:` and `recommend:` blocks the contract requires in most cases, but occasionally degrade into prose-formatted "## Findings" / "## Recommendation" sections. The instruction in expert SKILL.md sections "Lookup and output" was tightened (commit `295baff`) to require the YAML block first, which improved compliance on subsequent runs.
