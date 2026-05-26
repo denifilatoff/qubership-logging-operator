@@ -1,15 +1,15 @@
 id: fluentbit-graylog-connection-refused
 backend: graylog
 expected_area: graylog-server-troubleshoot
-expected_recommend_kind: graylog-endpoint-config-fix
+expected_recommend_kind: graylog-statefulset-scale
 description: >
-  FluentBit ConfigMap points at an unreachable Graylog endpoint. FluentBit
-  pods are healthy by their own standards (no OOM, no CrashLoop) but their
-  logs contain `connection refused to <graylog-host>` and
-  `no upstream connections available`. The cause is in the Graylog zone
-  (endpoint / Service / DNS misconfig) but only observable from FluentBit's
-  perspective. Expected chain: triage → fluentbit-troubleshoot
-  (emits findings with the cited Graylog endpoint in evidence) →
-  routing-policy detects the cited-string and redirects →
-  graylog-server-troubleshoot (closes with a recommend that fixes the
-  endpoint reference).
+  Graylog StatefulSet scaled to 0 replicas via the LoggingService CR.
+  FluentBit's output-graylog.conf is correct and points at the actual
+  Graylog Service, but every send fails because the Service has no
+  endpoints. FluentBit logs `connection refused` or
+  `no upstream connections available` referencing graylog-service:12201.
+  The cause is in the Graylog zone, not the FluentBit zone.
+  Expected chain: triage → fluentbit-troubleshoot (emits findings with
+  the cited Graylog endpoint in evidence) → routing-policy detects the
+  cited-string and redirects → graylog-server-troubleshoot (closes with
+  a recommend that restores the StatefulSet replica count).

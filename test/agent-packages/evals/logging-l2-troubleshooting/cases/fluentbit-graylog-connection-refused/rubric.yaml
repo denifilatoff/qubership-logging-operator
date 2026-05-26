@@ -18,12 +18,12 @@ checks:
       and whose `evidence` field literally contains a FluentBit error
       line that references the Graylog endpoint. Acceptable forms
       (any one is sufficient):
-        - "getaddrinfo" together with the literal Graylog hostname
-          (e.g. `graylog-unreachable.logging.svc.cluster.local`) or
-          "Name or service not known" / "nodename nor servname";
-        - "connection refused" together with a Graylog hostname or a
-          Graylog port number;
-        - "no upstream connections available" anywhere in evidence.
+        - "connection refused" together with the literal Graylog
+          hostname (e.g. `graylog-service`) or the GELF port
+          `12201`;
+        - "no upstream connections available" anywhere in evidence;
+        - "Connection failed to" or "tcp" error referencing
+          `graylog-service` / `:12201`.
       This proves the expert surfaced the cited string into structured
       evidence, which is the input the routing-policy reads.
 
@@ -42,18 +42,20 @@ checks:
   - id: recommend-emitted
     description: >
       A structured `recommend` block is the final output. The recommend
-      proposes a fix on the Graylog endpoint reference in the
-      `logging-fluentbit` ConfigMap, or on the Graylog Service whose
-      hostname the ConfigMap expects.
+      restores the Graylog StatefulSet to a non-zero replica count
+      (e.g. helm upgrade --set graylog.replicas=N, or editing the
+      LoggingService CR), OR restores the Graylog Service endpoints by
+      whatever means. The recommend must NOT propose editing FluentBit's
+      ConfigMap — FluentBit's config is correct.
 
   - id: read-before-recommend
     description: >
-      The recommend carries a read-safe snapshot covering at minimum the
-      current `output-graylog.conf` stanza from the
-      `logging-fluentbit` ConfigMap AND evidence that the referenced
-      hostname does not resolve / the Service does not exist (e.g.
-      `kubectl get svc -n <ns> | grep graylog` output, or a `nslookup`
-      / `getent hosts` failure).
+      The recommend carries a read-safe snapshot covering at minimum
+      the current Graylog pod state showing no pods running (e.g.
+      `kubectl get pods -l app.kubernetes.io/name=graylog` returns empty)
+      AND the Graylog Service endpoints state (e.g. `kubectl get endpoints
+      graylog-service` showing empty endpoints, or the LoggingService CR
+      with `graylog.replicas: 0`).
 
   - id: no-mutations
     description: >

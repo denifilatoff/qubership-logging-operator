@@ -2,36 +2,20 @@
 
 ## Root cause
 
-The `logging-fluentbit` ConfigMap's `output-graylog.conf` references a
-Graylog Service hostname that does not resolve. FluentBit fails every
-send with `connection refused` or DNS failure; messages back up locally
-then drop.
+Graylog StatefulSet has been scaled to 0 replicas. The `graylog-service` Kubernetes Service exists but has no backing pods. FluentBit's output-graylog.conf is correct (Host `graylog-service`, Port `12201`), but every TCP connection attempt to `graylog-service:12201` is refused because there are no endpoints.
+
+The fix is in the Graylog zone — restore the StatefulSet to its previous replica count. FluentBit's own config does not need changes.
 
 ## Expected chain shape
 
-1. Triage runs the initial diagnostic pass. FluentBit shows up as healthy
-   at the pod level, but its logs are noisy with DNS or TCP failures
-   naming a Graylog host.
-2. Triage invokes `fluentbit-troubleshoot` first (collector zone shows
-   signal).
-3. `fluentbit-troubleshoot` matches its `fluentbit-connection-timeout-graylog`
-   symptom from the catalogue, emits a `findings` entry whose `evidence`
-   quotes the FluentBit error line that names the Graylog endpoint. For
-   an unresolvable hostname this is typically a `getaddrinfo` line
-   ("Name or service not known"); for an unreachable port it would be a
-   `connection refused` line; either way, the line contains the Graylog
-   endpoint string the routing-policy looks for.
-4. The triage routing-policy detects the Graylog endpoint citation in the
-   FluentBit expert's evidence via the `cited-strings.md` `points_to:
-   graylog` pattern.
-5. Triage invokes `graylog-server-troubleshoot` next. That expert verifies
-   the Graylog Service / DNS state and emits the closing recommend
-   (correct the endpoint hostname in the FluentBit ConfigMap, or restore
-   the Graylog Service that should match).
+1. Triage runs the initial diagnostic pass. FluentBit pods are running but their logs are noisy with `connection refused` / `no upstream connections available` to `graylog-service`. Graylog pods are absent.
+2. Triage invokes `fluentbit-troubleshoot` first (collector zone shows signal).
+3. `fluentbit-troubleshoot` matches its `fluentbit-connection-timeout-graylog` symptom from the catalogue, emits a `findings` entry whose `evidence` quotes the connection-refused log line (or `no upstream connections available`) and names `graylog-service:12201` as the unreachable endpoint.
+4. The triage routing-policy detects the Graylog endpoint citation in the FluentBit expert's evidence via the `cited-strings.md` `points_to: graylog` pattern (pattern `connection refused.*:12201` or `no upstream connections available`).
+5. Triage invokes `graylog-server-troubleshoot` next. That expert observes `kubectl get pods -l app.kubernetes.io/name=graylog` returns empty, `kubectl get endpoints graylog-service` is empty, and emits the closing recommend.
 
 ## Final recommend
 
-A structured `recommend` block proposing the correction of the endpoint
-reference in `logging-fluentbit`'s `output-graylog.conf`. Snapshot must
-include the current ConfigMap value plus evidence of the failed
-resolution / connection.
+A structured `recommend` block in the graylog-server-troubleshoot expert's output proposing to scale the Graylog StatefulSet back up (e.g. via `helm upgrade --set graylog.replicas=1` or by reverting the LoggingService CR's `graylog.replicas`). Snapshot must include the absent graylog pods and the empty endpoints list.
+
+The recommend must NOT propose editing FluentBit's ConfigMap — FluentBit's config is correct.

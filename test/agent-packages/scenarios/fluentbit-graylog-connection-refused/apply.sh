@@ -7,36 +7,43 @@ source "$SCRIPT_DIR/../lib.sh"
 RELEASE="qubership-logging-operator"
 NS="logging"
 CHART="$KIND_DIR/../../charts/qubership-logging-operator"
-BAD_HOST="graylog-unreachable.logging.svc.cluster.local"
-
-# Helm key path verified against charts/qubership-logging-operator/values.yaml:
-# the fluentbit Graylog output target is fluentbit.graylogHost (see lines ~1228
-# and the operator template controllers/fluentbit/fluentbit.configmap/conf.d/
-# outputs/output-graylog.conf, which renders {{ .Values.Fluentbit.GraylogHost }}).
 
 log "current helm revision (revert.sh will rollback to it):"
 helm --kube-context "$KCTX" -n "$NS" history "$RELEASE" | tail -3
 
-log "upgrading $RELEASE with fluentbit graylog output pointed at unreachable host"
+log "upgrading $RELEASE with graylog.replicas=0 (scale graylog StatefulSet to 0, leaving Service with no endpoints)"
 helm --kube-context "$KCTX" -n "$NS" upgrade "$RELEASE" "$CHART" \
   --reuse-values \
-  --set "fluentbit.graylogHost=$BAD_HOST" \
+  --set "graylog.replicas=0" \
   --wait=false
 
-log "waiting up to 4 min for first connection-refused log line"
+log "waiting up to 4 min for graylog pod to disappear"
 deadline=$(( $(date +%s) + 240 ))
 while [[ $(date +%s) -lt $deadline ]]; do
-  # Look for either DNS-failure lines (NXDOMAIN host → getaddrinfo) or
-  # the generic "no upstream connections" post-retry message FluentBit
-  # emits once buffering chokes. The "connection refused" branch is here
-  # for completeness if BAD_HOST is changed to a resolvable name later.
-  found="$("${KUBECTL[@]}" -n "$NS" logs ds/logging-fluentbit --tail=100 2>/dev/null \
-    | grep -cE 'connection refused|no upstream connections|getaddrinfo.*graylog-unreachable' || true)"
-  if [[ "${found:-0}" -gt 0 ]]; then
-    log "connection-refused log lines observed"
+  count="$("${KUBECTL[@]}" -n "$NS" get pods -l app.kubernetes.io/name=graylog -o name 2>/dev/null | wc -l | tr -d ' ')"
+  if [[ "${count:-1}" == "0" ]]; then
+    log "graylog pods gone (Service graylog-service now has no endpoints)"
     break
   fi
   sleep 5
 done
 
-"${KUBECTL[@]}" -n "$NS" logs ds/logging-fluentbit --tail=20
+log "waiting up to 2 min for first FluentBit connection-refused log line"
+deadline=$(( $(date +%s) + 120 ))
+while [[ $(date +%s) -lt $deadline ]]; do
+  # Look for FluentBit lines citing graylog endpoint failure. The "no upstream
+  # connections available" message appears generically; "connection refused"
+  # appears when the Service has no endpoints. Either is acceptable evidence
+  # for the cited-strings cascade.
+  found="$("${KUBECTL[@]}" -n "$NS" logs ds/logging-fluentbit --tail=200 -c logging-fluentbit 2>/dev/null \
+    | grep -cE 'connection refused|no upstream connections available|graylog-service' || true)"
+  if [[ "${found:-0}" -gt 0 ]]; then
+    log "FluentBit endpoint-failure log lines observed"
+    break
+  fi
+  sleep 5
+done
+
+"${KUBECTL[@]}" -n "$NS" get pods -l app.kubernetes.io/name=graylog 2>&1 || true
+"${KUBECTL[@]}" -n "$NS" get endpoints graylog-service 2>&1 || true
+"${KUBECTL[@]}" -n "$NS" logs ds/logging-fluentbit --tail=20 -c logging-fluentbit 2>&1 || true
