@@ -46,7 +46,7 @@ curl -sk -u <u>:<p> https://<os-host>:9200/_nodes/jvm?pretty | grep -E 'heap_ini
 
 1. Take the diagnostic-pass output above.
 2. For each entry in [references/symptoms.md](references/symptoms.md), evaluate its `match` block against the diagnostic-pass output. Collect every entry that matches.
-3. Emit the result in the schema from [references/shared-contract.md](references/shared-contract.md#expert-output-schema):
+3. **Emit the result as a YAML code block.** Your response MUST begin with a fenced `yaml` code block (` ```yaml `) containing the schema below. Do NOT precede it with Markdown headers (`## Findings`, `## Recommendation`) or narrative prose. The structural emission is the contract — prose-style headers do not satisfy it.
 
 ```yaml
 findings:
@@ -59,7 +59,9 @@ raw_diagnostic_pass: |
   <abbreviated digest of the diagnostic-pass output above>
 ```
 
-If the matched entry's `proposed_fix` warrants a structured operator action, also emit a `recommend` block per the shared contract, citing the matched `symptom_id` in `why`.
+If the matched entry's `proposed_fix` warrants a structured operator action, append a `recommend` block per the schema in [references/shared-contract.md](references/shared-contract.md#recommend-block-schema) — within the same YAML code block, immediately after `raw_diagnostic_pass`. Cite the matched `symptom_id` verbatim in `why`. Do NOT emit the recommend as prose; structural emission is required.
+
+Plain-prose narration about what you found, after the YAML block, is fine for the human reader, but the YAML block above is the machine-checkable contract and must come first.
 
 ## Anti-fabrication
 
