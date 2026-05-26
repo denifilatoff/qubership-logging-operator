@@ -6,7 +6,8 @@ CASES := \
   opensearch-flood-stage-readonly \
   operator-helm-bad-image \
   fluentbit-cpu-throttle \
-  graylog-gelf-input-size-too-small
+  graylog-gelf-input-size-too-small \
+  fluentbit-graylog-connection-refused
 
 EVAL_TARGETS := $(addprefix eval-,$(CASES))
 
