@@ -15,8 +15,7 @@ working on the skills themselves. Not part of any skill's distribution.
 - [eval-framework-survey.md](eval-framework-survey.md) — comparison of promptfoo / inspect-ai / others for our use case.
 - [skill-evaluation-methodology.md](skill-evaluation-methodology.md) — what we mean by "evaluating" a skill, what we measure, and why.
 - [package-layering-model.md](package-layering-model.md) — how the L1 / L2 / topic-specific skill packages stack.
-- [chain-of-hypotheses-design.md](chain-of-hypotheses-design.md) — chain-of-hypotheses routing, signal classification, cascade-refute pattern. The L2 logging package is the first instance.
-- [routing-redesign-proposal.md](routing-redesign-proposal.md) — proposal to simplify the leaf contract to two outcomes and move all routing judgment into triage. Gated on a baseline sweep with the current model.
+- [expert-orchestration-pattern.md](expert-orchestration-pattern.md) — design pattern for APM packages that diagnose multi-component systems: expert skills own one technology each, orchestrator owns topology and routing.
 - [troubleshooting-methodology.md](troubleshooting-methodology.md) — domain knowledge that informs the L1 and L2 skills.
 - [reference-documents.md](reference-documents.md) — index of external references we draw on.
 
