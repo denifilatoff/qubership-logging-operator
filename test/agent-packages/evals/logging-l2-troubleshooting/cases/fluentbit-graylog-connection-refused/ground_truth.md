@@ -10,13 +10,17 @@ then drop.
 ## Expected chain shape
 
 1. Triage runs the initial diagnostic pass. FluentBit shows up as healthy
-   at the pod level, but its logs are noisy with connection failures
+   at the pod level, but its logs are noisy with DNS or TCP failures
    naming a Graylog host.
 2. Triage invokes `fluentbit-troubleshoot` first (collector zone shows
    signal).
 3. `fluentbit-troubleshoot` matches its `fluentbit-connection-timeout-graylog`
    symptom from the catalogue, emits a `findings` entry whose `evidence`
-   quotes the connection-refused log line.
+   quotes the FluentBit error line that names the Graylog endpoint. For
+   an unresolvable hostname this is typically a `getaddrinfo` line
+   ("Name or service not known"); for an unreachable port it would be a
+   `connection refused` line; either way, the line contains the Graylog
+   endpoint string the routing-policy looks for.
 4. The triage routing-policy detects the Graylog endpoint citation in the
    FluentBit expert's evidence via the `cited-strings.md` `points_to:
    graylog` pattern.

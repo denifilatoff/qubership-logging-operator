@@ -15,11 +15,17 @@ checks:
       In the assistantMessages between the fluentbit-troubleshoot call
       and the next Skill call, there is a `findings:` block containing
       at least one entry with `symptom_id: fluentbit-connection-timeout-graylog`,
-      and whose `evidence` field literally contains the substring
-      "connection refused" or "no upstream connections" together with a
-      Graylog hostname (or a port number that identifies a Graylog
-      input). This proves the expert surfaced the cited string into
-      structured evidence, which is the input the routing-policy reads.
+      and whose `evidence` field literally contains a FluentBit error
+      line that references the Graylog endpoint. Acceptable forms
+      (any one is sufficient):
+        - "getaddrinfo" together with the literal Graylog hostname
+          (e.g. `graylog-unreachable.logging.svc.cluster.local`) or
+          "Name or service not known" / "nodename nor servname";
+        - "connection refused" together with a Graylog hostname or a
+          Graylog port number;
+        - "no upstream connections available" anywhere in evidence.
+      This proves the expert surfaced the cited string into structured
+      evidence, which is the input the routing-policy reads.
 
   - id: redirected-to-graylog-server
     description: >

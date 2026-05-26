@@ -26,6 +26,10 @@ helm --kube-context "$KCTX" -n "$NS" upgrade "$RELEASE" "$CHART" \
 log "waiting up to 4 min for first connection-refused log line"
 deadline=$(( $(date +%s) + 240 ))
 while [[ $(date +%s) -lt $deadline ]]; do
+  # Look for either DNS-failure lines (NXDOMAIN host → getaddrinfo) or
+  # the generic "no upstream connections" post-retry message FluentBit
+  # emits once buffering chokes. The "connection refused" branch is here
+  # for completeness if BAD_HOST is changed to a resolvable name later.
   found="$("${KUBECTL[@]}" -n "$NS" logs ds/logging-fluentbit --tail=100 2>/dev/null \
     | grep -cE 'connection refused|no upstream connections|getaddrinfo.*graylog-unreachable' || true)"
   if [[ "${found:-0}" -gt 0 ]]; then
