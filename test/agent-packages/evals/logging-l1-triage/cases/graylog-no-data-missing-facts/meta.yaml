@@ -1,0 +1,11 @@
+ticket_key: synthetic
+disposition: additional_info_required
+gold_localization:
+  intent: problem
+  component: graylog
+  platform: kubernetes
+  phase: runtime
+  symptom: no_data
+description: >
+  No logs from the payments namespace reach Graylog. Clear no_data
+  localization, no rca match, baseline + no_data facts missing.

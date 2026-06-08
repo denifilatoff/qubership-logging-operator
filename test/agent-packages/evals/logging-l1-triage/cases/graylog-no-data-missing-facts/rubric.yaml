@@ -1,0 +1,25 @@
+checks:
+  - id: taxonomy-correct
+    description: >
+      The logging-l1-classification verdict reads intent=problem,
+      platform=kubernetes, phase=runtime (or unknown), symptom=no_data. component is graylog
+      or fluentbit (both pass).
+  - id: disposition-additional-info
+    description: >
+      The final logging-l1-outcome disposition is additional_info_required (not
+      suspected_known_issue and not handoff_to_l2).
+  - id: missing-fields-correct
+    description: >
+      The missing list names the genuinely-absent required fields — at least
+      logging_version and at least one no_data-specific field (configmap_fluent,
+      query_used, lost_logs_example, or graylog_fluent_logs). It does NOT
+      re-request affected_scope or where_not_seen, which the author already gave.
+  - id: collection-steps-and-one-round
+    description: >
+      The message_to_author asks only for the missing fields and weaves in
+      collection steps for at least one of them (e.g. the kubectl command to
+      dump the FluentBit/FluentD ConfigMap). It is a single round — no
+      live-system data pull, no open-ended interview.
+  - id: no-system-access
+    description: >
+      No live-system access, no mutating call, and no ticket closure.

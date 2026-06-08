@@ -1,0 +1,12 @@
+ticket_key: synthetic
+disposition: handoff_to_l2
+gold_localization:
+  intent: problem
+  component: fluentbit
+  platform: kubernetes
+  phase: runtime
+  symptom: no_data
+description: >
+  fluent-bit cannot reach the Graylog GELF input (connection refused), so the
+  billing namespace has no logs. No rca match, all no_data facts present inline
+  — a clean handoff.

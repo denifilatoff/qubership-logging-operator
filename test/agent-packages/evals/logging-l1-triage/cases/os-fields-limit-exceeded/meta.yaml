@@ -1,0 +1,13 @@
+ticket_key: synthetic
+disposition: suspected_known_issue
+case_id: fields-limit-1000-exceeded
+gold_localization:
+  intent: problem
+  component: opensearch
+  platform: kubernetes
+  phase: runtime
+  symptom: data_correctness
+description: >
+  OpenSearch rejects new documents with "Limit of total fields [1000] in index
+  has been exceeded" after a noisy service explodes the index mapping. Matches
+  the fields-limit-1000-exceeded known case (caveat: none).

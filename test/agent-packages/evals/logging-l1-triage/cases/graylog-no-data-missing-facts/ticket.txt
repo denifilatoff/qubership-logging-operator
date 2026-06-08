@@ -1,0 +1,15 @@
+Summary: No logs from the payments namespace in Graylog
+
+Description:
+Since yesterday, no logs from the payments namespace are showing up in
+Graylog. Other namespaces still look fine — their logs keep arriving. We
+only notice the gap in the Graylog UI; we have not checked anything else
+yet.
+
+This is on our Kubernetes logging install. The payments pods are running
+normally and writing to stdout, but their lines never reach Graylog search.
+
+Steps to Reproduce:
+1. Open Graylog search.
+2. Filter for the payments namespace.
+3. See nothing for the last day, while other namespaces are present.

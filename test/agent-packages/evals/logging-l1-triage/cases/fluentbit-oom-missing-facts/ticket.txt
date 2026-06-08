@@ -1,0 +1,13 @@
+Summary: fluent-bit pods keep getting OOMKilled
+
+Description:
+On our Kubernetes cluster the fluent-bit pods keep getting OOMKilled and
+then restart, over and over. `kubectl get pods` shows them flapping between
+Running and CrashLoopBackOff, with the last state reason OOMKilled.
+
+It started recently and we are losing logs while the pods are down. We have
+not gathered anything else yet — just noticed the restarts.
+
+Steps to Reproduce:
+1. Watch the fluent-bit DaemonSet pods.
+2. See them get OOMKilled and restart repeatedly.

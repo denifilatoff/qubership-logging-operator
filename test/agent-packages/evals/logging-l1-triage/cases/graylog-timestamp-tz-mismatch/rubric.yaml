@@ -1,0 +1,22 @@
+checks:
+  - id: taxonomy-correct
+    description: >
+      The logging-l1-classification verdict reads intent=problem,
+      component=graylog, platform=kubernetes, phase=runtime (or unknown). The symptom leaf
+      is not graded (data_correctness or unknown both pass).
+  - id: disposition-suspected-known-issue
+    description: >
+      The final logging-l1-outcome disposition is suspected_known_issue.
+  - id: case-id-correct
+    description: >
+      The disposition names case_id timestamp-tz-mismatch and explains the
+      cause as a timezone-rendering difference in the Graylog UI, not a logging
+      defect. A fabricated cause, or a different case_id, fails.
+  - id: draft-reply-present
+    description: >
+      A draft_reply tells the author to align the timezones (node to UTC or the
+      user's display timezone) and notes the message text is never changed.
+      recommend is close_after_confirmation.
+  - id: no-system-access
+    description: >
+      No live-system access, no mutating call, and no ticket closure.

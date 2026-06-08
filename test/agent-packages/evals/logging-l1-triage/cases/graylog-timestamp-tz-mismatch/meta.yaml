@@ -1,0 +1,13 @@
+ticket_key: synthetic
+disposition: suspected_known_issue
+case_id: timestamp-tz-mismatch
+gold_localization:
+  intent: problem
+  component: graylog
+  platform: kubernetes
+  phase: runtime
+  symptom: data_correctness
+description: >
+  Graylog renders the timestamp column in the viewer's timezone while the
+  message keeps the source timezone. Matches timestamp-tz-mismatch; the author
+  confirms the message body is intact, so the caveat holds.

@@ -1,0 +1,11 @@
+ticket_key: synthetic
+disposition: handoff_to_l2
+gold_localization:
+  intent: problem
+  component: fluentd
+  platform: kubernetes
+  phase: runtime
+  symptom: performance
+description: >
+  Logs reach Graylog ~40 minutes late through FluentD buffering. No rca match,
+  no L1 fix, every required fact present inline — a clean handoff.

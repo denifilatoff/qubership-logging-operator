@@ -1,0 +1,49 @@
+Summary: No logs from the billing namespace reach Graylog via fluent-bit
+
+Description:
+On our Kubernetes logging install, no logs from the billing namespace arrive
+in Graylog. The pods run fine and write to stdout, but nothing reaches
+search. Other namespaces are unaffected. We have collected everything we can
+below.
+
+Logging version: 14.8.1
+
+LoggingService CR (deployment parameters):
+  spec:
+    fluentbit:
+      install: true
+      output:
+        graylog:
+          host: graylog.logging.svc
+          port: 12201
+
+Affected scope: namespace billing, service billing-api.
+
+Where not seen: the Graylog UI (All messages stream).
+
+Query used: source:billing-api AND namespace:billing
+
+Example of the lost logs (from the node,
+/var/log/pods/billing_billing-api-7f9_*/billing-api/0.log):
+  2026-06-08T10:15:02Z stdout F {"level":"info","msg":"charge ok","id":910}
+
+fluent-bit log (logging-fluentbit pod):
+  [error] [output:gelf:gelf.0] no upstream connections available
+  [error] [output:gelf:gelf.0] connection refused to graylog.logging.svc:12201
+
+Graylog server log: no GELF input errors; the input is listening on 12201.
+
+fluent-bit ConfigMap (logging-fluentbit, output section):
+  [OUTPUT]
+      Name   gelf
+      Match  kube.billing.*
+      Host   graylog.logging.svc
+      Port   12201
+      Mode   tcp
+
+Environment: https://graylog.example.internal/search
+
+Steps to Reproduce:
+1. Emit a log from billing-api.
+2. Run the query above in Graylog.
+3. See nothing for the billing namespace.

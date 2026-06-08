@@ -1,0 +1,12 @@
+ticket_key: synthetic
+disposition: suspected_known_issue
+case_id: ism-config-cosmetic
+gold_localization:
+  intent: problem
+  component: opensearch
+  platform: kubernetes
+  phase: runtime
+  symptom: config_error
+description: >
+  A cosmetic IndexNotFoundException [.opendistro-ism-config] floods the
+  OpenSearch log. Matches the ism-config-cosmetic known case (caveat: none).

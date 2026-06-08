@@ -1,0 +1,11 @@
+ticket_key: synthetic
+disposition: additional_info_required
+gold_localization:
+  intent: problem
+  component: fluentbit
+  platform: kubernetes
+  phase: runtime
+  symptom: oom_memory
+description: >
+  fluent-bit pods OOMKilled and flapping in CrashLoopBackOff. Clear
+  localization, no rca match, all collection facts missing.

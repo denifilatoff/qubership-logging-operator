@@ -1,0 +1,28 @@
+Summary: Graylog container will not stay up on our External Logging VM
+
+Description:
+We run External Logging on a VM (a plain Docker host, no orchestrator). The
+Graylog container starts, runs for about a minute, then exits and restarts. It has not stayed
+up since this morning's reboot. We have gathered the details below.
+
+Logging version: 14.5.2
+
+Deployment parameters (External Logging install inventory):
+  graylog_heap: 2g
+  mongodb_host: 127.0.0.1:27017
+  elasticsearch_hosts: http://127.0.0.1:9200
+
+SSH access: provided — `ssh deploy@graylog-vm-01` with the attached key.
+
+Container logs (`docker logs --tail 50 graylog_graylog_1`):
+  2026-06-08 06:10:02 INFO  Graylog starting
+  2026-06-08 06:10:51 ERROR Injected providers exception
+  Caused by: com.mongodb.MongoSocketOpenException: Exception opening socket
+  Caused by: java.net.ConnectException: Connection refused (127.0.0.1:27017)
+  2026-06-08 06:10:51 INFO  Shutting down
+
+Environment: ssh deploy@graylog-vm-01 (no UI reachable while Graylog is down).
+
+Steps to Reproduce:
+1. `docker ps` on the VM — graylog_graylog_1 cycles up and down.
+2. `docker logs graylog_graylog_1` — see the MongoDB connection refused above.

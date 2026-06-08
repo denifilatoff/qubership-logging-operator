@@ -1,0 +1,20 @@
+checks:
+  - id: taxonomy-correct
+    description: >
+      The logging-l1-classification verdict reads intent=problem,
+      component=graylog, platform=vm, phase=runtime (or unknown), symptom=not_running.
+  - id: disposition-additional-info
+    description: >
+      The final logging-l1-outcome disposition is additional_info_required.
+  - id: missing-fields-correct
+    description: >
+      The missing list names the genuinely-absent VM required fields — at least
+      logging_version, container_logs, and ssh_access.
+  - id: collection-steps-and-one-round
+    description: >
+      The message_to_author asks only for the missing fields and weaves in VM
+      collection steps for at least one (e.g. `docker logs` for the Graylog
+      container). Single round only — no live-system access.
+  - id: no-system-access
+    description: >
+      No live-system access, no mutating call, and no ticket closure.

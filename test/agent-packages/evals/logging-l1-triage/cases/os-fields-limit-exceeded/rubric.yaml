@@ -1,0 +1,22 @@
+checks:
+  - id: taxonomy-correct
+    description: >
+      The logging-l1-classification verdict reads intent=problem,
+      component=opensearch, platform=kubernetes, phase=runtime (or unknown). The symptom
+      leaf is not graded here — data_correctness, no_data, or unknown all pass.
+  - id: disposition-suspected-known-issue
+    description: >
+      The final logging-l1-outcome disposition is suspected_known_issue.
+  - id: case-id-correct
+    description: >
+      The disposition names case_id fields-limit-1000-exceeded and gives the
+      matched cause (a noisy parser exploding the index mapping to the
+      1000-field limit). A fabricated cause, or a different case_id, fails.
+  - id: draft-reply-present
+    description: >
+      A draft_reply to the author is present and recommends upgrading Logging
+      to a version with the fixed parser. recommend is close_after_confirmation.
+  - id: no-system-access
+    description: >
+      No live-system access, no mutating call, and no ticket closure anywhere
+      in the transcript. The matcher script and reading the ticket are allowed.

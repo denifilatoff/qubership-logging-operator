@@ -1,0 +1,83 @@
+description: L1 triage skill eval — cases generated from synthetic tickets, no live systems.
+
+tests: file://cases.js
+
+extensions:
+  - file://hooks.js:extensionHook
+
+# Cases are independent (one text in, one verdict out — no shared state), so the
+# run may parallelize. Leave maxConcurrency unset; promptfoo picks its default.
+
+# Shared prompt: the per-case ticket is injected as the `prompt_text` var. The
+# wrapper tells the agent to triage end to end, so both skills fire in order.
+prompts:
+  - |
+    You are an L1 support engineer triaging an incoming Qubership logging-stack
+    support ticket. Triage it end to end: first classify the ticket, then decide
+    the next action on it. Use your installed skills and follow them exactly. Do
+    not touch any live system.
+
+    --- TICKET ---
+    {{prompt_text}}
+
+providers:
+  - id: anthropic:claude-agent-sdk
+    label: with-pkg
+    config:
+      model: claude-haiku-4-5
+      apiKeyRequired: false
+      # NB: the provider config key is `working_dir`, not `cwd`.
+      working_dir: .workdir/with-pkg
+      # The classification and outcome skills shell out to extract_signals.py
+      # and match_rca.py, so Bash + Python are required. L1 is tuned for and
+      # evaluated on a weak model.
+      allow_all_tools: true
+
+defaultTest:
+  assert:
+    # llm-rubric's default rubric var is `{{ output }}` and it ONLY carries the
+    # agent's final assistant text. Reshape `output` so the judge also sees the
+    # intermediate assistant messages (the classification verdict, which two of
+    # the three disposition shapes do not restate) and the tool-call array.
+    - type: llm-rubric
+      transform: |
+        const md = (context && context.metadata) || {};
+        const messages = md.messages || md.transcript || [];
+        const assistantTexts = messages
+          .filter(m => m && m.role === 'assistant')
+          .map(m => {
+            if (typeof m.content === 'string') return m.content;
+            if (Array.isArray(m.content)) {
+              return m.content
+                .filter(b => b && b.type === 'text')
+                .map(b => b.text)
+                .join('\n');
+            }
+            return JSON.stringify(m.content);
+          })
+          .filter(s => s && s.length > 0);
+        return JSON.stringify({
+          result: typeof output === 'string' ? output : JSON.stringify(output),
+          assistantMessages: assistantTexts,
+          toolCalls: md.toolCalls || []
+        }, null, 2);
+      provider:
+        id: anthropic:claude-agent-sdk
+        label: judge-claude-sonnet-4-6
+        config:
+          model: claude-sonnet-4-6
+          apiKeyRequired: false
+          custom_allowed_tools: []
+      rubricPrompt: file://judge-prompt.txt
+      # Name the score so it rolls up natively (prompts[].metrics.namedScores).
+      metric: rubric
+    # The pipeline runs two skills in order. skill-used checks one id, so we
+    # assert each — both under metric `routing`. report.js requires BOTH to pass
+    # for the case's routing score, because the taxonomy (classification) is not
+    # always restated by the terminal disposition.
+    - type: skill-used
+      value: logging-l1-classification
+      metric: routing
+    - type: skill-used
+      value: logging-l1-outcome
+      metric: routing

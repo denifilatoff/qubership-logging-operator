@@ -1,0 +1,16 @@
+Summary: Repeated ERROR in OpenSearch log about a missing ism-config index
+
+Description:
+Our Kubernetes logging stack runs fine for users — logs flow, search works,
+dashboards update. But the OpenSearch container log prints this at ERROR every
+few seconds and it is filling our log volume:
+
+  [ERROR][o.o.i.i.ManagedIndexCoordinator] get managed-index failed:
+  IndexNotFoundException [.opendistro-ism-config]
+
+The constant error noise looks like a fault and is wasting disk on the log
+volume. It needs to stop.
+
+Steps to Reproduce:
+1. Tail the OpenSearch container log.
+2. Watch the IndexNotFoundException for .opendistro-ism-config repeat.

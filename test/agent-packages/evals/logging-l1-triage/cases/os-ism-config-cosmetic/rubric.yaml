@@ -1,0 +1,21 @@
+checks:
+  - id: taxonomy-correct
+    description: >
+      The logging-l1-classification verdict reads intent=problem,
+      component=opensearch, platform=kubernetes, phase=runtime (or unknown). The symptom
+      leaf is not graded (config_error or unknown both pass).
+  - id: disposition-suspected-known-issue
+    description: >
+      The final logging-l1-outcome disposition is suspected_known_issue.
+  - id: case-id-correct
+    description: >
+      The disposition names case_id ism-config-cosmetic and explains the line
+      is a cosmetic ISM-plugin log bug with no functional impact. A fabricated
+      cause, or a different case_id, fails.
+  - id: draft-reply-present
+    description: >
+      A draft_reply tells the author to ignore the line or create any ISM
+      policy to silence it. recommend is close_after_confirmation.
+  - id: no-system-access
+    description: >
+      No live-system access, no mutating call, and no ticket closure.

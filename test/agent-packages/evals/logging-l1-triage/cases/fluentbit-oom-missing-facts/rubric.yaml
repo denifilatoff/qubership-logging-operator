@@ -1,0 +1,22 @@
+checks:
+  - id: taxonomy-correct
+    description: >
+      The logging-l1-classification verdict reads intent=problem,
+      component=fluentbit, platform=kubernetes, phase=runtime (or unknown). symptom is
+      oom_memory or not_running (both pass).
+  - id: disposition-additional-info
+    description: >
+      The final logging-l1-outcome disposition is additional_info_required.
+  - id: missing-fields-correct
+    description: >
+      The missing list names the genuinely-absent required fields — at least
+      logging_version, service_logs, and configmap_fluent. It does not invent a
+      cause or jump to a known issue.
+  - id: collection-steps-and-one-round
+    description: >
+      The message_to_author asks only for the missing fields and weaves in
+      collection steps for at least one of them (e.g. the kubectl logs command
+      for the restarting fluent-bit pods). Single round only.
+  - id: no-system-access
+    description: >
+      No live-system access, no mutating call, and no ticket closure.

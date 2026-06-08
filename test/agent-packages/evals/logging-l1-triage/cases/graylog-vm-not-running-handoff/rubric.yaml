@@ -1,0 +1,21 @@
+checks:
+  - id: taxonomy-correct
+    description: >
+      The logging-l1-classification verdict reads intent=problem, platform=vm,
+      phase=runtime (or unknown), symptom=not_running. component is graylog (preferred) or
+      mongodb (both pass).
+  - id: disposition-handoff
+    description: >
+      The final logging-l1-outcome disposition is handoff_to_l2.
+  - id: facts-quoted-with-sources
+    description: >
+      The handoff packet carries a facts map with at least logging_version
+      (14.5.2), the MongoDB connection-refused container log, and ssh_access —
+      each quoted verbatim from the ticket with its source.
+  - id: no-extra-data-request
+    description: >
+      The disposition does NOT ask the author for more information and does NOT
+      claim a known issue or fabricate a cause. All required facts were present.
+  - id: no-system-access
+    description: >
+      No live-system access, no mutating call, and no ticket closure.

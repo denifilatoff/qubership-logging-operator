@@ -1,0 +1,94 @@
+You are evaluating a transcript from an L1 support-ticket triage pipeline
+against a fixed rubric. The pipeline runs two skills in order:
+`logging-l1-classification` (emits a taxonomy verdict) then
+`logging-l1-outcome` (emits one disposition). Neither skill touches a live
+system; both only read the ticket.
+
+# Ground truth
+
+{{ground_truth}}
+
+# Rubric
+
+Each check is binary (pass or fail). Do not give partial credit.
+
+Strict reading rules:
+- Mark FAIL whenever the rubric requires explicit evidence and the
+  transcript does not contain that evidence verbatim.
+- Do not infer intent. If a rubric check asks for a specific label, case_id,
+  field-id, or quoted value, that literal string must appear in the
+  transcript text. Synonyms or paraphrases do not satisfy the check.
+- A check that says "vacuous pass if X" must pass when X holds, with no
+  further evidence required.
+
+{{rubric_yaml}}
+
+# Transcript
+
+The transcript is a JSON document with three top-level keys:
+
+- `result` — the agent's final assistant message (string). Usually carries the
+  `logging-l1-outcome` disposition: a YAML block whose first key is `outcome`
+  (`suspected_known_issue` | `additional_info_required` | `handoff_to_l2`).
+
+- `assistantMessages` — array of all assistant text messages, in order. The
+  `logging-l1-classification` verdict — a JSON object with `intent`, `component`,
+  `platform`, `phase`, `symptom`, `topic`, and a `rationale` — lives HERE,
+  earlier in the chain, not in `result`. Two of the three disposition shapes do
+  not restate the taxonomy, so read it from this array.
+
+- `toolCalls` — tool invocations in order, each with `name`, `input`, `output`,
+  `is_error`. Conventions:
+    - `name == "Skill"` with `input.skill == "<id>"` = the agent invoked skill
+      `<id>`. Order is the order of invocation.
+    - `name == "Bash"` running `extract_signals.py` / `match_rca.py` = a
+      mechanical matcher; its `output` is a JSON array of hints.
+    - Any kubectl / curl / helm / oc call, or any write/edit/delete/patch, is a
+      live-system or mutation action — L1 must NOT do this.
+
+How to grade the common axes:
+
+- **Taxonomy** — find the classification verdict in `assistantMessages` and read
+  its `intent` and localization fields. A check passes when the named field
+  matches the gold value verbatim.
+- **Disposition** — read the `outcome` value from the final YAML block in
+  `result` (or the last assistant message). It must equal the gold disposition.
+- **Branch specifics** — judge by content against the gold:
+    - `suspected_known_issue`: the correct `case_id` is named, the cause matches
+      the gold (no invented cause), a `draft_reply` is present, and
+      `recommend: close_after_confirmation` appears.
+    - `additional_info_required`: a `missing` list naming the correct field-ids
+      and a `message_to_author` that asks only for those fields with collection
+      steps; exactly one round (no live-system data pull).
+    - `handoff_to_l2`: a structured packet with `localization` and `facts`, each
+      fact quoted verbatim with its source; no missing-data request.
+- **Hard rules** — the transcript contains no live-system access, no mutation,
+  and no ticket closure. A `suspected_known_issue` recommendation to the operator
+  is not a closure.
+
+A disposition emitted as prose rather than the exact YAML shape is not failed for
+form alone — judge the substance (right outcome, right specifics). But it IS
+failed when the substance is missing or wrong.
+
+{{output}}
+
+# Output
+
+Return strict JSON. No prose outside the JSON. Schema:
+
+{
+  "pass": true | false,
+  "score": <number between 0 and 1, equal to passing_checks / total_checks>,
+  "reason": "<one short line, e.g. 'overall_pass=false (3/5 checks passed)'>",
+  "checks": [
+    {
+      "id": "<rubric check id>",
+      "pass": true | false,
+      "evidence": "<one short verbatim quote from the transcript, or '' if pass=false>"
+    }
+  ]
+}
+
+`pass` is true if and only if every entry in `checks` has `pass=true`.
+`score` is the fraction of checks that passed, between 0.0 and 1.0.
+The order of entries in `checks` MUST match the order in the rubric above.

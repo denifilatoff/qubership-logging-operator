@@ -1,0 +1,12 @@
+ticket_key: synthetic
+disposition: additional_info_required
+gold_localization:
+  intent: problem
+  component: graylog
+  platform: vm
+  phase: runtime
+  symptom: not_running
+description: >
+  Graylog container restarts on an External Logging VM. Clear localization, no
+  rca match, all VM facts missing. Same localization as the handoff case but
+  without the facts.

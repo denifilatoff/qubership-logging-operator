@@ -1,0 +1,8 @@
+# Ephemeral agent workdir prepared by hooks.js (apm install per run)
+.workdir/
+
+# Promptfoo output and the generated summary.md
+results/
+
+# npm dep for the claude-agent-sdk provider; installed locally in this dir
+node_modules/
