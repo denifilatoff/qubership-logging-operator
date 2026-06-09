@@ -1,0 +1,3 @@
+I just installed the logging stack and the install fell over. It's not
+coming up properly and I can't tell why. Can you take a look and tell me
+what went wrong?

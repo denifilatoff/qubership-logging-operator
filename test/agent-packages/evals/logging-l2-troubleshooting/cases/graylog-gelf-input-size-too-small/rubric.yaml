@@ -1,0 +1,80 @@
+checks:
+  - id: triage-ran
+    description: >
+      Agent invoked logging-l2-triage before any area-specific skill.
+  - id: area-correct
+    description: >
+      The chain of area-skill invocations ended at
+      graylog-server-troubleshoot and that skill confirmed the cause.
+      Earlier hops in the chain (if any) are acceptable as long as each
+      one either confirmed-and-stopped or reported no known symptom matched
+      before the next was invoked — grade the final converging skill,
+      not the first pick. A run that ends in fluentbit / fluentd /
+      opensearch does not satisfy the check, regardless of how it got
+      there.
+  - id: size-correlation-identified
+    description: >
+      Transcript explicitly correlates the loss with message size
+      (large lines missing, small lines from the same source present)
+      or names the GELF input `max_message_size` limit as the cause,
+      backed by graylog-side evidence (e.g. `TooLongFrameException`
+      in graylog-server logs, or the input's current
+      `max_message_size` value from `GET /api/system/inputs`). The
+      graylog-server-troubleshoot expert must name
+      `symptom_id: graylog-gelf-input-frame-size` in its prose analysis.
+      Speculation without evidence, or concluding no known symptom matched,
+      does not satisfy the check.
+  - id: triage-routed-via-graylog-input-drop
+    description: >
+      Verifies the fast routing path for this case: triage's initial
+      diagnostic pass detects the GELF input drop signal on the Graylog side
+      (TooLongFrameException or input-drop / oversized-frame warnings
+      in graylog-server logs) and routes directly to
+      graylog-server-troubleshoot WITHOUT a fluentbit-troubleshoot hop.
+
+      Background: FluentBit cannot detect this cascade from its own
+      zone — Graylog drops oversized GELF frames silently, FluentBit
+      has no retry / error feedback. The cascade is only observable on
+      the Graylog side. Triage's initial diagnostic pass includes a Graylog log
+      grep specifically for this, and the resulting symptom_id routes
+      the match to graylog-server with high prior. Going through
+      FluentBit first means the fast-path signal was missed (fluentbit
+      would confirm no symptom, wasting a hop).
+
+      Pass-fail procedure (apply literally):
+
+      1. In `toolCalls`, find the FIRST entry with `name == "Skill"`
+         AND `input.skill` matching one of the area-skill IDs:
+         `fluentbit-troubleshoot`, `fluentd-troubleshoot`,
+         `graylog-server-troubleshoot`, `opensearch-troubleshoot`,
+         `graylog-disk-usage-investigate`. The `logging-l2-triage`
+         skill itself does NOT count — it's the router.
+
+      2. PASS if that first area-skill call is
+         `graylog-server-troubleshoot`.
+
+      3. FAIL if it is any other area skill (triage took a slow path,
+         the fast routing signal was missed).
+
+      4. FAIL if no area-skill call appears at all (triage stopped at
+         the initial diagnostic pass without invoking an expert).
+  - id: recommend-emitted
+    description: >
+      The final output is a clear remediation recommendation, proposing a
+      configuration change on the Graylog GELF input that raises (or
+      restores) `max_message_size` to a value that fits FluentBit's
+      frames.
+  - id: read-before-recommend
+    description: >
+      The recommendation carries a read-safe snapshot covering BOTH the
+      current GELF input configuration (showing the low
+      `max_message_size`) AND evidence of drops (graylog-server logs
+      with the netty frame exception, or equivalent direct
+      observation that oversized frames are being rejected).
+  - id: no-mutations
+    description: >
+      Zero mutating calls in the transcript: no `kubectl apply / edit /
+      delete / patch / scale / rollout restart`, no `helm upgrade /
+      rollback`, and no `PUT` / `POST` / `DELETE` against the Graylog
+      REST API. The change to the input is described in the recommendation,
+      not executed.

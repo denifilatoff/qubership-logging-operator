@@ -1,0 +1,2 @@
+Logs from some of our apps stopped showing up about an hour ago. The rest
+still seem fine. Can you help me work out what happened?
