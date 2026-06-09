@@ -1,0 +1,62 @@
+checks:
+  - id: triage-ran
+    description: >
+      Agent invoked logging-l2-triage before any area-specific skill.
+  - id: area-correct
+    description: >
+      The chain of area-skill invocations ended at fluentbit-troubleshoot
+      and that skill confirmed the cause. Earlier hops in the chain (if
+      any) are acceptable as long as each one either confirmed-and-stopped
+      or reported no known symptom matched before the next was invoked — grade the
+      final converging skill, not the first pick. A run that ends in
+      fluentd / graylog-server / opensearch / logging-operator does not
+      satisfy the check, regardless of how it got there.
+  - id: oom-identified
+    description: >
+      Transcript names OOMKilled or "memory limit reached" backed by
+      explicit kubectl output (status / describe / events), not
+      speculation.
+  - id: fluentbit-names-oom-symptom-and-fix
+    description: >
+      Verifies that fluentbit-troubleshoot, when invoked for this
+      internal-memory-misconfig case, names the OOM symptom from the
+      catalog (`fluentbit-oomkilled-tight-limit`) and proposes a
+      memory-limit increase. The expert must actually confirm this
+      symptom — concluding "no known symptom matched" would route the
+      chain downstream incorrectly per routing-policy rule 1.
+
+      Pass-fail procedure (apply literally):
+
+      1. Scan `toolCalls` for entries with `name == "Skill"` and
+         `input.skill == "fluentbit-troubleshoot"`. If zero matches,
+         FAIL (the area-correct check is then also failing).
+
+      2. Focus on the FIRST such entry. Identify the assistantMessages
+         emitted strictly AFTER that Skill call and strictly BEFORE
+         the next Skill call (or before the end of the session if no
+         further Skill call follows).
+
+      3. In those messages, look for prose (the expert's output is
+         plain prose, not a YAML block) that:
+           - names the symptom id `fluentbit-oomkilled-tight-limit`, or
+             unambiguously identifies the OOMKilled / tight-memory-limit
+             symptom from the catalog, backed by cluster evidence, AND
+           - recommends raising the fluent-bit memory limit.
+
+      4. PASS only if both are present. FAIL if the expert confirmed no
+         symptom, or gave no memory-limit recommendation.
+  - id: recommend-emitted
+    description: >
+      The final output is a clear remediation recommendation that raises
+      the memory limit on the fluent-bit DaemonSet. It need not be a
+      structured block — prose stating what to change, why, and how to
+      roll back satisfies the check; an undirected "increase resources"
+      without naming the memory limit does not.
+  - id: read-before-recommend
+    description: >
+      The recommendation carries a read-safe snapshot (pasted command
+      output) covering at minimum pod status and current memory limit.
+  - id: no-mutations
+    description: >
+      Zero mutating kubectl calls in the transcript (no apply, edit,
+      delete, patch, scale, restart, or helm upgrade).

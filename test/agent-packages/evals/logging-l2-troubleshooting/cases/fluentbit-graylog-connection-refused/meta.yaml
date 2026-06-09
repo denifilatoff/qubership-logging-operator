@@ -1,0 +1,15 @@
+id: fluentbit-graylog-connection-refused
+backend: graylog
+expected_area: graylog-server-troubleshoot
+expected_recommend_kind: graylog-input-port-restore
+description: >
+  Graylog GELF TCP input rebound off port 12201 via the Graylog REST API.
+  Graylog itself stays up (StatefulSet running, UI on 9000, old data
+  searchable), but nothing listens on 12201, so every FluentBit send to
+  graylog-service:12201 is refused. FluentBit's output-graylog.conf is
+  correct. The symptom looks collector-side (no new logs, Graylog fine),
+  but the cause is in the Graylog zone, not the FluentBit zone.
+  Expected chain: triage → fluentbit-troubleshoot (emits findings with
+  the cited Graylog endpoint in evidence) → routing-policy detects the
+  cited-string and redirects → graylog-server-troubleshoot (closes with
+  a recommend that restores the GELF input's listen port to 12201).

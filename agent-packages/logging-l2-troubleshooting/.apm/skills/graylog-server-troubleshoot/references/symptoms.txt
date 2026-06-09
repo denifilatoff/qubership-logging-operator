@@ -1,0 +1,30 @@
+# symptoms.txt — deterministic catalog for graylog-server-troubleshoot.
+# One [<symptom-id>] section per known problem. A bare line is a
+# case-insensitive, whitespace-flexible phrase; an "re:" line is a raw regex.
+# Matched against the diagnostic-pass output (concatenated command stdout).
+# A match is a HINT — confirm against references/symptoms.md before using it.
+# Signal-less symptoms (Detection: manual in the .md) have NO section here.
+
+[graylog-opensearch-storage-full]
+CrashLoopBackOff
+re: disk\.percent\s*[=:]\s*9[0-9]
+
+[graylog-pod-oom-killed]
+OOMKilled
+re: OutOfMemoryError|java\.lang\.OutOfMemoryError
+
+[graylog-low-performance]
+re: Journal utilization is too high|journal is (almost )?full
+
+[graylog-widget-fielddata-text-field]
+re: illegal_argument_exception.*Text fields are not optimized.*fielddata=true
+
+[graylog-deflector-not-alias]
+re: Deflector exists as an index and is not an alias|Active write index for index set ".*" doesn't exist yet
+
+[graylog-gelf-input-frame-size]
+re: TooLongFrameException|HTTP body exceeds maximum allowed size|frame too large|gelf.*frame.*(?:too|exceeds)
+
+[graylog-gelf-input-not-listening]
+connection refused
+no upstream connections available

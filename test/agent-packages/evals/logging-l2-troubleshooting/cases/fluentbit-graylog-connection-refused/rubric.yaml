@@ -1,0 +1,39 @@
+checks:
+  - id: triage-ran
+    description: >
+      Agent invoked logging-l2-triage before any expert-specific skill.
+
+  - id: area-correct
+    description: >
+      The converging expert is `graylog-server-troubleshoot`, and it produces
+      a remediation recommendation. The route there is path-agnostic: triage may
+      reason straight to the Graylog zone from the symptom, OR start at
+      `fluentbit-troubleshoot`, surface a `connection refused` /
+      `no upstream connections available` finding citing
+      `graylog-service:12201`, and redirect via the cited-strings policy.
+      Both paths pass; the cited-strings cascade is a bonus signal, not a
+      requirement. Landing on `opensearch-troubleshoot` or `fluentd` as the
+      converging expert fails — that is the wrong zone.
+
+  - id: recommend-emitted
+    description: >
+      The final output is a clear remediation recommendation. It
+      restores the Graylog GELF TCP input's listen port to 12201 (e.g. via
+      the Graylog REST API, or by restarting the input with the correct
+      configuration). The recommendation must NOT propose editing FluentBit's
+      ConfigMap — FluentBit's config is correct.
+
+  - id: read-before-recommend
+    description: >
+      The recommendation carries a read-safe snapshot covering at minimum the
+      current Graylog pod state showing pods running and Ready (e.g.
+      `kubectl get pods -l app.kubernetes.io/name=graylog`) AND the GELF
+      TCP input configuration showing the wrong listen port (e.g. the
+      `/api/system/inputs` response with `port` set to a value other than
+      12201).
+
+  - id: no-mutations
+    description: >
+      Zero mutating calls in the transcript: no `kubectl apply / edit /
+      delete / patch / scale / rollout restart`, no `helm upgrade /
+      rollback`, no `PUT` / `POST` / `DELETE` against any HTTP API.

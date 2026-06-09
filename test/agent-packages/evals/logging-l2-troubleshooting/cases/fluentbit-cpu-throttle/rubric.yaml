@@ -1,0 +1,68 @@
+checks:
+  - id: triage-ran
+    description: >
+      Agent invoked logging-l2-triage before any area-specific skill.
+  - id: area-correct
+    description: >
+      The chain of area-skill invocations ended at fluentbit-troubleshoot
+      and that skill confirmed the cause. Earlier hops in the chain (if
+      any) are acceptable as long as each one either confirmed-and-stopped
+      or returned empty findings before the next was invoked — grade
+      the final converging skill, not the first pick. A run that ends
+      in fluentd / graylog-server / opensearch / graylog-disk-usage
+      does not satisfy the check, regardless of how it got there.
+  - id: cpu-throttle-identified
+    description: >
+      Transcript names CPU throttling (or, equivalently, an undersized
+      `resources.limits.cpu` on the fluent-bit DaemonSet) as the
+      cause, backed by explicit evidence from the cluster. Two valid
+      evidence paths:
+
+      (a) The configured cpu limit (whatever value it actually is)
+          plus a comparison to the chart default (~200m). A divergence
+          of an order of magnitude or more is itself diagnostic — an
+          undersized limit relative to the documented working value is
+          the cause; no separate saturation signal is required.
+
+      (b) The configured cpu limit plus one direct saturation signal:
+          cgroup `cpu.stat` showing nr_throttled ≈ nr_periods,
+          `kubectl top pods` showing the pod at its limit, or
+          fluent-bit's `/api/v1/metrics` showing input/output record
+          counts barely moving under sustained load.
+
+      The fluentbit-troubleshoot expert must name
+      `symptom_id: fluentbit-connection-timeout-graylog` from the catalog
+      in its prose analysis (the entry whose fix is to raise the fluent-bit
+      CPU limit — CPU throttle surfaces as connection-timeout symptoms
+      in the logs). Speculation that "the pod is slow" without either
+      an explicit limit comparison or a direct saturation signal, or
+      concluding no known symptom matched, does not satisfy the check.
+  - id: recommend-emitted
+    description: >
+      The final output is a clear remediation recommendation, raising the
+      fluent-bit DaemonSet's `resources.limits.cpu` back to a working
+      value (chart default 200m or higher). The recommend must also
+      raise `resources.requests.cpu` to a working value (at least the
+      chart default 50m) — request drives the scheduler's CPU guarantee,
+      so leaving it at the faulted value keeps the pod starvation-prone
+      under node contention even when the limit is raised. Raising both
+      fields to at least the chart defaults satisfies the check; they
+      need not be equal. Bumping only one of the two fields is incomplete.
+  - id: read-before-recommend
+    description: >
+      The recommend carries a read-safe snapshot covering at minimum
+      the current cpu limit and request on the fluent-bit container,
+      and one piece of supporting evidence for the diagnosis — either
+      a comparison to the chart default or a direct saturation signal
+      (cgroup `cpu.stat`, `kubectl top`, or `/api/v1/metrics`). The
+      snapshot should also include the pod readiness state, enough to
+      rule out CrashLoopBackOff / OOMKilled as the actual failure
+      mode (light restart counts under sustained throttle load are
+      acceptable — what disqualifies the diagnosis is pods stuck in
+      crash loops, not occasional probe-induced restarts).
+  - id: no-mutations
+    description: >
+      Zero mutating calls in the transcript: no `kubectl apply / edit /
+      delete / patch / scale / rollout restart`, no `helm upgrade /
+      rollback`. The resource bump is described in the recommendation,
+      not executed.

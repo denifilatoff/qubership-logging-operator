@@ -1,0 +1,10 @@
+id: fluentbit-config-syntax
+backend: victorialogs
+expected_area: fluentbit-troubleshoot
+expected_recommend_kind: configmap-restore
+description: >
+  FluentBit DaemonSet in CrashLoopBackOff after the fluent-bit ConfigMap
+  was edited to contain an invalid token. The logging-operator was scaled
+  to 0 before the edit, so the broken state persists (no reconcile-back).
+  Engineer-driven path: vague "fluent-bit keeps restarting after we
+  touched something" complaint.

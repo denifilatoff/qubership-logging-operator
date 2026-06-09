@@ -1,0 +1,4 @@
+name: logging-l2-troubleshooting
+version: 0.3.3
+description: L2 troubleshooting skills for the Qubership logging stack — Graylog server, OpenSearch, FluentD, FluentBit, plus a focused disk-usage investigator. Read-only against live systems; mutations emitted as structured `recommend` blocks for the operator to apply.
+author: Qubership

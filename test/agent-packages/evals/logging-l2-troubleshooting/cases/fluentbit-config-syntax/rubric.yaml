@@ -1,0 +1,45 @@
+checks:
+  - id: triage-ran
+    description: >
+      Agent invoked logging-l2-triage before any area-specific skill.
+  - id: area-correct
+    description: >
+      The chain of area-skill invocations ended at fluentbit-troubleshoot
+      and that skill confirmed the cause. Earlier hops in the chain (if
+      any) are acceptable as long as each one either confirmed-and-stopped
+      or returned empty findings before the next was invoked — grade
+      the final converging skill, not the first pick. A run that ends
+      in fluentd / graylog-server / opensearch / graylog-disk-usage
+      does not satisfy the check, regardless of how it got there.
+  - id: config-parse-error-identified
+    description: >
+      Transcript names a parse / syntax error in the fluent-bit
+      ConfigMap as the cause, backed by explicit evidence from the
+      cluster — at minimum the pod's CrashLoopBackOff status from
+      `kubectl get pods` plus either (a) the fluent-bit container log
+      showing the parse error or (b) the offending content in the
+      ConfigMap data. The fluentbit-troubleshoot expert must name
+      `symptom_id: fluentbit-configmap-parse-error` from the catalog in
+      its prose analysis. Speculation without evidence, or concluding no
+      known symptom matched, does not satisfy the check.
+  - id: recommend-emitted
+    description: >
+      The final output is a clear remediation recommendation that
+      restores the fluent-bit ConfigMap to a working state — reapply
+      the prior content or restore from a snapshot. Recommends that
+      address only adjacent state (e.g. operator-side actions) without
+      restoring the ConfigMap do not satisfy the check.
+  - id: read-before-recommend
+    description: >
+      The recommendation carries a read-safe snapshot covering at minimum
+      the fluent-bit pod status (CrashLoopBackOff) and the current
+      ConfigMap content showing the bad token. If anything in the
+      surrounding reconcile path is unusual (operator scaled down,
+      Helm release in pending, etc.) and explains why the broken
+      state persists, capture that too — but it is supplementary
+      evidence, not a required snapshot field.
+  - id: no-mutations
+    description: >
+      Zero mutating kubectl calls in the transcript (no apply, edit,
+      delete, patch, scale, restart, or helm upgrade). The fix is
+      described in the recommendation, not executed.
