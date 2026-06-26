@@ -5,9 +5,12 @@ Shared contract for every `troubleshoot-*` and `investigate-*` expert skill in t
 
 ## How L2 expert skills are invoked
 
-- Discover cluster context from the cluster — never ask the engineer for namespaces, endpoints, or credentials as your
-  first move. `kubectl` and the Graylog / OpenSearch HTTP endpoints are already reachable (in-cluster Service,
-  port-forward, or an exposed route).
+- Operate against the kube-context that is already attached; selecting among clusters is out of this skill's scope.
+  Within that cluster, discover what you need rather than asking the engineer for namespaces, endpoints, or credentials
+  as your first move — in a working deployment `kubectl` and the Graylog / OpenSearch HTTP endpoints are reachable
+  (in-cluster Service, port-forward, or an exposed route). Escalate to the engineer only when an in-cluster read
+  genuinely fails (RBAC denial, missing secret, endpoint unreachable), or when no single cluster context is attached to
+  operate on.
 - If a symptom needs pod-level introspection on a VM-deployed Graylog / OpenSearch (Docker-on-VM, SSH,
   `/srv/docker/...`), recognise the limit and hand back. HTTP/REST APIs remain in scope on VM deployments.
 

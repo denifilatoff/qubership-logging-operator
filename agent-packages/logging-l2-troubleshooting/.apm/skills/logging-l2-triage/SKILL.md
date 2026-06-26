@@ -11,10 +11,32 @@ diagnosis continues in this same session.
 Cluster reachability and the K8s-only invariant: see
 [references/shared-contract.md](references/shared-contract.md#how-l2-skills-are-invoked).
 
-## Prereq discovery (do not ask the engineer)
+## Cluster targeting and prereq discovery
 
-`kubectl` context is already attached. Discover what you need from the cluster, do not interrupt the session with
-questions about namespaces, endpoints, or credentials:
+Two separate decisions. Pick the right cluster first; discover everything else from inside it.
+
+### Pick the cluster (ask only when the target is genuinely ambiguous)
+
+An engineer may hold many `kubectl` contexts at once. The current context is not a safe guess — diagnosing the wrong
+cluster is worse than spending one turn to ask. Decide by these cases, first match wins:
+
+- **A coordinate is present in the task** — resolve it, switch to that context, proceed without asking. A coordinate is
+  any of: a kube-context name, a cluster name or alias, an API-server URL, or a namespace-qualified reference
+  (`cluster/namespace`). A looser hint — a Graylog or console URL, or an environment name like `dev` / `stage` / `prod`
+  — counts only if it resolves to exactly one context; if it matches none or more than one, ask.
+- **No coordinate, exactly one context available** — use it. No ambiguity, no question.
+- **No coordinate, multiple contexts available** — ask the engineer which cluster, and state why: the task carries no
+  cluster coordinate. Do not fall back to the current context.
+- **Coordinate present but it does not resolve** — the task names a cluster, but no kube-context matches it (or two
+  plausibly match). Ask, naming the mismatch (`task names cluster X; no matching kube-context found`), not a blanket
+  request for cluster details.
+
+Asking costs one turn and may dead-end a fully automated session — accept that. A wrong-cluster diagnosis costs more.
+
+### Discover everything else from the cluster (do not ask)
+
+Once the cluster is fixed, discover what you need from it — do not interrupt the session with questions about
+namespaces, endpoints, or credentials:
 
 - Logging namespace: `kubectl get ns | grep -iE 'logging|graylog|opensearch'`
 - Service endpoints (Graylog, OpenSearch, log-generator):
@@ -26,8 +48,9 @@ questions about namespaces, endpoints, or credentials:
 - Graylog/OpenSearch HTTP access: `kubectl port-forward -n <ns> svc/<svc> <local>:<remote>` in the background, then
   `curl http://localhost:<local>/...`
 
-Only if discovery genuinely fails (RBAC denial, missing secret) escalate to the engineer. Never ask for cluster details
-as your first action — it dead-ends automated sessions and wastes a turn for a human one.
+Only if discovery genuinely fails (RBAC denial, missing secret) escalate to the engineer. This "discover, don't ask"
+rule covers in-cluster details — namespaces, endpoints, credentials. It does not override the cluster-targeting rule
+above: when the target cluster is genuinely ambiguous, asking which cluster is the correct first action.
 
 ## Protocol
 
