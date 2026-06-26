@@ -80,5 +80,4 @@ harness/
   scorer.py           routing_scorer + triage_scorer (reshape, rubric template, grade parse)
   workdir.py          apm install + symlink dereference
   report.py           samples_df → results/<run>/summary.md
-references/           offline inspect-ai and Agent SDK docs + api-notes.md
 ```
