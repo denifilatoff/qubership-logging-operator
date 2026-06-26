@@ -1,0 +1,18 @@
+disposition: suspected_known_issue
+expected: >
+  Taxonomy: intent=problem, component=graylog, platform=kubernetes, phase=runtime;
+  symptom=data_correctness or unknown (not graded). case_id=timestamp-tz-mismatch.
+  Cause: the Graylog UI renders the timestamp field in the viewer's timezone while the
+  message text keeps the source application's timezone — this is not a logging defect.
+  The caveat (hand off if message text itself is rewritten) does not apply because the
+  author confirms message body is intact. draft_reply tells the author to align
+  timezones (set node to UTC or change the Graylog user's display timezone) and notes
+  this only affects how the timestamp field is shown, never the message text.
+  recommend=close_after_confirmation.
+checks:
+  - id: taxonomy-correct
+    description: The classification verdict matches the expected taxonomy.
+  - id: case-id-correct
+    description: Names the expected known-issue case_id with the matching cause (no invented cause), and includes a draft_reply recommending close after confirmation.
+  - id: draft-reply-present
+    description: The draft_reply is present and addresses the expected cause.

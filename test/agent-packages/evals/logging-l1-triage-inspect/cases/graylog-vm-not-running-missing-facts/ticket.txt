@@ -1,0 +1,11 @@
+Summary: Graylog container keeps restarting on our External Logging VM
+
+Description:
+We run External Logging on a VM (a plain Docker host, no orchestrator). The
+Graylog container keeps restarting. `docker ps` shows graylog_graylog_1 cycling — up for about
+a minute, then gone, then back. It started this morning and we have not
+gathered anything else yet.
+
+Steps to Reproduce:
+1. Run `docker ps` on the Graylog VM.
+2. Watch graylog_graylog_1 restart roughly every minute.

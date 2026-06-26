@@ -1,0 +1,40 @@
+Summary: Logs arrive in Graylog about 40 minutes late through FluentD
+
+Description:
+On our Kubernetes logging install, application logs reach Graylog roughly 40
+minutes behind real time. The data is correct and complete — it just lands
+late. The delay grows during busy hours and shrinks overnight, so the FluentD
+aggregator is buffering rather than dropping. Nothing is lost; everything
+is slow.
+
+Logging version: 14.6.0
+
+LoggingService CR (deployment parameters):
+  spec:
+    fluentd:
+      install: true
+      bufferType: file
+      flushInterval: 60s
+      resources:
+        limits: { cpu: "500m", memory: "512Mi" }
+
+Source vs Graylog (same line, two places):
+  app stdout : 2026-06-08T09:00:01Z  order 7781 accepted
+  in Graylog : 2026-06-08T09:41:12Z  order 7781 accepted
+The message text matches; only the arrival into Graylog is ~41 minutes later.
+
+FluentD ConfigMap (logging-fluentd, relevant keys):
+  <buffer>
+    @type file
+    flush_thread_count 1
+    flush_interval 60s
+    chunk_limit_size 8m
+    total_limit_size 512m
+  </buffer>
+
+Environment: https://graylog.example.internal/streams/000/search
+
+Steps to Reproduce:
+1. Emit a log line from any app pod and note its source timestamp.
+2. Search for the same line in Graylog and read its arrival time.
+3. Compare — Graylog is about 40 minutes behind during busy hours.

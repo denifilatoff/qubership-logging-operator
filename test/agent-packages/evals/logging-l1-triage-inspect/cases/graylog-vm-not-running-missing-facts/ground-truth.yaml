@@ -1,0 +1,15 @@
+disposition: additional_info_required
+expected: >
+  Taxonomy: intent=problem, component=graylog, platform=vm, phase=runtime,
+  symptom=not_running. No rca match. Only a symptom description is present; all
+  required facts are missing: logging_version, deployment_params, ssh_access,
+  container_logs. Collection steps from the VM howto woven in (e.g.,
+  "docker logs --tail 2000 graylog_graylog_1" for container_logs; SSH access
+  instructions for ssh_access). One round only; invent no cause.
+checks:
+  - id: taxonomy-correct
+    description: The classification verdict matches the expected taxonomy.
+  - id: missing-fields-correct
+    description: The missing list names the expected required fields and invents no cause.
+  - id: collection-steps-and-one-round
+    description: Asks only for the missing fields with collection steps; one round only.

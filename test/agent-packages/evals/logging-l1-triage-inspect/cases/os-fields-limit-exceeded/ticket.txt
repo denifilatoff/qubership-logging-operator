@@ -1,0 +1,20 @@
+Summary: OpenSearch stops indexing new logs from one service
+
+Description:
+On our Kubernetes logging install, OpenSearch no longer accepts new
+documents for the current write index. Indexing a document by hand against
+the OpenSearch endpoint returns:
+
+  {"type":"illegal_argument_exception",
+   "reason":"Limit of total fields [1000] in index has been exceeded"}
+
+It began a couple of weeks after we onboarded a chatty service that prints
+many distinct key=value pairs on every line, so the index mapping keeps
+growing. Older indices are unaffected; only the active write index rejects
+documents. There is plenty of free storage; nothing is near the watermark.
+
+Steps to Reproduce:
+1. Send logs from the noisy service.
+2. Watch them never appear in search.
+3. POST a test document straight to OpenSearch and read the
+   illegal_argument_exception above.

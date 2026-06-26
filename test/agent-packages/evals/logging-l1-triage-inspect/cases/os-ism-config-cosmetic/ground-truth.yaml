@@ -1,0 +1,16 @@
+disposition: suspected_known_issue
+expected: >
+  Taxonomy: intent=problem, component=opensearch, platform=kubernetes, phase=runtime;
+  symptom=config_error or unknown (not graded). case_id=ism-config-cosmetic. Cause: a
+  cosmetic bug in the OpenSearch index-management plugin before 2.10.0.0 — the
+  opendistro-ism-config line is logged at ERROR but should be DEBUG; no functional
+  impact, no data loss (caveat=none). draft_reply explains the line is cosmetic and
+  tells the author to ignore it or create any ISM policy (even an empty one) to silence
+  it. recommend=close_after_confirmation.
+checks:
+  - id: taxonomy-correct
+    description: The classification verdict matches the expected taxonomy.
+  - id: case-id-correct
+    description: Names the expected known-issue case_id with the matching cause (no invented cause), and includes a draft_reply recommending close after confirmation.
+  - id: draft-reply-present
+    description: The draft_reply is present and addresses the expected cause.

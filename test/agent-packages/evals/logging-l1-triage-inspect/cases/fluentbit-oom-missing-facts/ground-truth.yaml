@@ -1,0 +1,14 @@
+disposition: additional_info_required
+expected: >
+  Taxonomy: intent=problem, component=fluentbit, platform=kubernetes, phase=runtime;
+  symptom oom_memory or not_running (both pass). No rca match, so the required facts
+  come from the baseline plus the oom/not_running row: logging_version, service_logs,
+  configmap_fluent (among others). Invent no cause. One round, with collection steps
+  woven in.
+checks:
+  - id: taxonomy-correct
+    description: The classification verdict matches the expected taxonomy.
+  - id: missing-fields-correct
+    description: The missing list names the expected required fields and invents no cause.
+  - id: collection-steps-and-one-round
+    description: Asks only for the missing fields with collection steps; one round only.

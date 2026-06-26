@@ -1,0 +1,18 @@
+disposition: handoff_to_l2
+expected: >
+  Taxonomy: intent=problem, component=fluentbit (preferred) or graylog (both pass),
+  platform=kubernetes, phase=runtime, symptom=no_data. No rca match; every required
+  fact is present inline, so handoff (not additional_info_required). Key facts:
+  logging_version=14.8.1, affected_scope=namespace billing / service billing-api,
+  lost_logs_example=node log line at 10:15:02Z, where_not_seen=Graylog UI All messages
+  stream, query_used="source:billing-api AND namespace:billing",
+  graylog_fluent_logs=fluent-bit "connection refused" lines + Graylog input status,
+  configmap_fluent=fluent-bit GELF [OUTPUT] section, deployment_params=LoggingService CR
+  snippet. Each fact quoted verbatim with its source. Invent no cause.
+checks:
+  - id: taxonomy-correct
+    description: The classification verdict matches the expected taxonomy.
+  - id: facts-quoted-with-sources
+    description: The handoff packet quotes the expected localization facts verbatim, each with its source.
+  - id: no-extra-data-request
+    description: Hands off without asking the author for more data.
