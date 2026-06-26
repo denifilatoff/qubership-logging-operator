@@ -1,0 +1,17 @@
+disposition: additional_info_required
+expected: >
+  Taxonomy: intent=problem, component=graylog or fluentbit (both pass),
+  platform=kubernetes, phase=runtime, symptom=no_data. No rca match. Already present:
+  affected_scope (payments namespace), where_not_seen (Graylog UI). Missing required
+  fields: logging_version, deployment_params, lost_logs_example, query_used,
+  graylog_fluent_logs, configmap_fluent. Must NOT re-request affected_scope or
+  where_not_seen. Collection steps woven in (e.g., kubectl -n logging get cm
+  logging-fluentbit logging-fluentd -o yaml for configmap_fluent). One round only;
+  invent no cause.
+checks:
+  - id: taxonomy-correct
+    description: The classification verdict matches the expected taxonomy.
+  - id: missing-fields-correct
+    description: The missing list names the expected required fields and invents no cause.
+  - id: collection-steps-and-one-round
+    description: Asks only for the missing fields with collection steps; one round only.

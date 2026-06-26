@@ -1,0 +1,16 @@
+disposition: suspected_known_issue
+expected: >
+  Taxonomy: intent=problem, component=opensearch, platform=kubernetes, phase=runtime;
+  symptom=data_correctness, no_data, or unknown (not graded on symptom leaf alone).
+  case_id=fields-limit-1000-exceeded. Cause: an older Logging parser extracts noisy
+  key=value pairs that explode the index mapping until the 1000-field limit is hit
+  (caveat=none, so the case applies directly). draft_reply tells the author to upgrade
+  Logging to a version with the fixed parser; notes accumulated noise fields can be
+  cleaned with the painless script from the runbook. recommend=close_after_confirmation.
+checks:
+  - id: taxonomy-correct
+    description: The classification verdict matches the expected taxonomy.
+  - id: case-id-correct
+    description: Names the expected known-issue case_id with the matching cause (no invented cause), and includes a draft_reply recommending close after confirmation.
+  - id: draft-reply-present
+    description: The draft_reply is present and addresses the expected cause.

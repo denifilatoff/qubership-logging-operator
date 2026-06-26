@@ -1,0 +1,16 @@
+Summary: Graylog shows different times in message and timestamp fields
+
+Description:
+On our Kubernetes Graylog, every event has different times in message and
+timestamp. The text inside the message is correct — it matches what the
+application actually logged, in the source timezone. But the separate
+`timestamp` column shown next to it is several hours off, so we cannot trust
+a search by time range — it returns the wrong events.
+
+To be clear, the message body text is not altered — only the `timestamp`
+field rendered beside it disagrees with the time embedded in the message.
+
+Steps to Reproduce:
+1. Open a recent event in Graylog search.
+2. Compare the time inside the message text with the `timestamp` column.
+3. Note they are several hours apart.

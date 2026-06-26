@@ -1,0 +1,6 @@
+inspect-ai
+claude-agent-sdk
+pyyaml
+pytest
+pandas
+pyarrow

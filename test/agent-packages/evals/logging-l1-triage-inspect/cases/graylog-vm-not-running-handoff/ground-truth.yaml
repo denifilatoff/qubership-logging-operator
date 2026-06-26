@@ -1,0 +1,16 @@
+disposition: handoff_to_l2
+expected: >
+  Taxonomy: intent=problem, component=graylog (preferred) or mongodb (both pass),
+  platform=vm, phase=runtime, symptom=not_running. No rca match; every required fact is
+  present inline, so handoff (not additional_info_required). Key facts:
+  logging_version=14.5.2, deployment_params=External Logging inventory snippet,
+  ssh_access=provided (ssh deploy@graylog-vm-01 with attached key),
+  container_logs=docker logs excerpt with MongoDB connection-refused error. Each fact
+  quoted verbatim with its source. Invent no cause.
+checks:
+  - id: taxonomy-correct
+    description: The classification verdict matches the expected taxonomy.
+  - id: facts-quoted-with-sources
+    description: The handoff packet quotes the expected localization facts verbatim, each with its source.
+  - id: no-extra-data-request
+    description: Hands off without asking the author for more data.
