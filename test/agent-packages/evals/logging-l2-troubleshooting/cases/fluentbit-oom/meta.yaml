@@ -1,0 +1,8 @@
+id: fluentbit-oom
+backend: victorialogs
+expected_area: fluentbit-troubleshoot
+expected_recommend_kind: resource-bump
+description: >
+  FluentBit DaemonSet OOMKilled because container memory limit is below
+  the steady-state working set. Engineer-driven path: vague "logs went
+  missing" complaint.

@@ -1,0 +1,47 @@
+checks:
+  - id: triage-ran
+    description: >
+      Agent invoked logging-l2-triage before any other skill or diagnostic
+      action.
+  - id: no-misroute
+    description: >
+      Triage did NOT route to any covered area-skill (fluentbit-troubleshoot,
+      fluentd-troubleshoot, graylog-server-troubleshoot,
+      graylog-disk-usage-investigate, opensearch-troubleshoot). The
+      symptom belongs to `logging-operator-troubleshoot`, which is not
+      shipped in this package; routing to a nearby skill as a substitute
+      would be wrong. No catalogue `symptom_id` covers this failure
+      mode (operator failures are out-of-scope per topology.md); if any
+      expert IS invoked it must report no known symptom matched rather than
+      invent an id. Triage handing back to the engineer, or stopping
+      after the initial diagnostic pass with the observation captured,
+      satisfies the check.
+  - id: operator-image-pull-identified
+    description: >
+      Transcript explicitly names the logging-operator pod as being in
+      ImagePullBackOff / ErrImagePull, backed by explicit kubectl output
+      — at minimum `kubectl get pods -n logging` showing the bad state
+      and either `kubectl describe pod` showing the `manifest unknown`
+      / `not found` registry error or `kubectl get deploy` showing the
+      bad image tag in the pod spec.
+  - id: recommend-emitted
+    description: >
+      The final output is a clear recommendation. Acceptable forms:
+      hand back to the engineer with the observation (manual diagnosis),
+      or propose rolling the qubership-logging-operator release back to
+      the previous revision (helm rollback). The recommendation must NOT
+      prescribe configuration changes to fluent-bit, fluent-d, Graylog,
+      or OpenSearch — none of those are at fault.
+  - id: read-before-recommend
+    description: >
+      The recommendation carries a read-safe snapshot covering at minimum
+      the operator pod status (ImagePullBackOff), the configured
+      container image in the operator deployment spec, and the helm
+      release history (`helm history qubership-logging-operator -n
+      logging`) identifying which revision pinned the broken image.
+  - id: no-mutations
+    description: >
+      Zero mutating calls in the transcript: no `kubectl apply / edit /
+      delete / patch / scale / rollout restart`, no `helm upgrade /
+      rollback`. The proposed rollback is described in the recommendation,
+      not executed.

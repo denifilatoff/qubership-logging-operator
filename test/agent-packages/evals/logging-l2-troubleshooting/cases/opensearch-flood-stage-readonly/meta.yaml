@@ -1,0 +1,13 @@
+id: opensearch-flood-stage-readonly
+backend: graylog
+expected_area: opensearch-troubleshoot
+expected_recommend_kind: opensearch-cluster-settings-change
+description: >
+  OpenSearch indices are in read-only state. Transient cluster watermarks
+  were lowered below current disk utilisation (low=10%, high=15%,
+  flood_stage=20%), and `index.blocks.read_only_allow_delete=true` was
+  set on every user index — the same end state a real flood-stage event
+  produces. New logs stop reaching Graylog. Disk is NOT physically full;
+  `df -h` looks healthy, so the diagnostic path must rely on OpenSearch
+  APIs. Engineer-driven path: vague "Graylog suddenly stopped showing
+  new logs" complaint.

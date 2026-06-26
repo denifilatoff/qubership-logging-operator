@@ -1,0 +1,15 @@
+id: fluentbit-cpu-throttle
+backend: graylog
+expected_area: fluentbit-troubleshoot
+expected_recommend_kind: resource-bump
+description: >
+  FluentBit's `resources.limits.cpu` was lowered to 5m (chart default
+  200m), with `requests.cpu` lowered to 1m in tandem. Under sustained
+  load only the fluent-bit pod co-located with `qubership-log-generator`
+  starves: cgroup throttling is ~95%, input-tail reads ~60 rec/s vs
+  ~10000 rec/s incoming, GELF output ships ~3 rec/s. Containerd rotates
+  the underlying log files faster than fluent-bit can consume — 95%+
+  of messages are silently lost before ingest. Pods are Running 2/2,
+  no restarts, no errors in `kubectl logs`. Engineer-driven path:
+  vague "logs are mostly missing in Graylog but everything looks
+  fine" complaint.

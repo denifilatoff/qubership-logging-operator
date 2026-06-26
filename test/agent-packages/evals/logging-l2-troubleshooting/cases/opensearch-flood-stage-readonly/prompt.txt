@@ -1,0 +1,2 @@
+Graylog stopped showing new logs about 20 minutes ago. I can still search
+older messages, but nothing new comes in. Can you take a look?

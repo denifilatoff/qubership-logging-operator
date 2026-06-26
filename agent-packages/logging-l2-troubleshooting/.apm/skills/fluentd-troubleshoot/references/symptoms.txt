@@ -1,0 +1,17 @@
+# symptoms.txt — deterministic catalog for fluentd-troubleshoot.
+# One [<symptom-id>] section per known problem. A bare line is a
+# case-insensitive, whitespace-flexible phrase; an "re:" line is a raw regex.
+# Matched against the diagnostic-pass output (concatenated command stdout).
+# A match is a HINT — confirm against references/symptoms.md before using it.
+# Signal-less symptoms (Detection: manual in the .md) have NO section here.
+
+[fluentd-worker-sigkill-oom]
+re: Worker \d+ exited unexpectedly with signal SIGKILL
+OOMKilled
+
+[fluentd-buffer-data-too-big-udp]
+re: failed to flush the buffer.*Data too big.*would create more than 128 chunks
+
+[fluentd-configmap-parse-error]
+re: Fluent::ConfigParseError|parse_error!|unmatched end tag
+CrashLoopBackOff

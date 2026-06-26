@@ -1,0 +1,2 @@
+Most of our logs are missing from Graylog. The busy services show almost
+nothing, while a trickle still gets through. Can you figure out why?

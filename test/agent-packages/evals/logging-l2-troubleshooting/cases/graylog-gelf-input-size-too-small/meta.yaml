@@ -1,0 +1,12 @@
+id: graylog-gelf-input-size-too-small
+backend: graylog
+expected_area: graylog-server-troubleshoot
+expected_recommend_kind: graylog-input-config-change
+description: >
+  Graylog GELF TCP input has its `max_message_size` lowered to 1024 bytes
+  via the Graylog REST API. FluentBit's GELF frames larger than that are
+  dropped at the netty frame decoder on the Graylog side (TooLongFrameException),
+  with no feedback to the collector. Symptom is partial log loss correlated
+  with message size: large lines from the affected pods never appear in
+  Graylog search while smaller lines from the same source arrive normally.
+  Engineer-driven path: vague "some logs are not reaching Graylog" complaint.

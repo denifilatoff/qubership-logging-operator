@@ -1,0 +1,96 @@
+You are evaluating a transcript from an L2 troubleshooting skill against
+a fixed rubric.
+
+# Ground truth
+
+{{ground_truth}}
+
+# Rubric
+
+Each check is binary (pass or fail). Do not give partial credit.
+
+Strict reading rules:
+- Mark FAIL whenever the rubric requires explicit evidence and the
+  transcript does not contain that evidence verbatim.
+- Do not infer intent. If a rubric check asks for a specific symptom_id
+  or value, that literal id/value must appear in the transcript text —
+  the experts name the symptom_id verbatim in their prose. Synonyms or
+  paraphrases of the id do not satisfy the check.
+- A check that says "vacuous pass if X" must pass when X holds, with
+  no further evidence required.
+
+{{rubric_yaml}}
+
+# Transcript
+
+The transcript is a JSON document with three top-level keys:
+
+- `result` — the agent's final assistant message (string). Usually
+  contains the closing remediation recommendation or a manual-diagnosis
+  statement, in prose.
+
+- `assistantMessages` — array of all assistant text messages from the
+  session, in chronological order. Each area skill's prose analysis —
+  the symptom_id it confirmed, the evidence it quoted, and the fix it
+  proposed — lives here mid-chain, NOT in `result`. When a rubric check
+  asks about a per-hop expert output, search this array.
+
+- `toolCalls` — array of tool invocations in chronological order, each
+  with `name`, `input`, `output`, and `is_error`. Authoritative for
+  chain ordering. Conventions:
+    - `name == "Skill"` with `input.skill == "<id>"` = agent invoked
+      skill `<id>`. Order in `toolCalls` is the order of invocation.
+    - `name == "Bash"` with `input.command` containing kubectl / helm
+      / curl = a shell action; `output` carries its result.
+    - Any non-list-style verb (`apply`, `edit`, `delete`, `patch`,
+      `scale`, `rollout restart`, `helm upgrade`, `helm rollback`,
+      `curl -X POST/PUT/DELETE` against an API) = a mutating call.
+
+To locate a specific area skill's output: find its Skill call in
+`toolCalls`, then read the assistantMessages emitted between that call
+and the next Skill call (or, for the last invocation, between the call
+and the final `result`).
+
+Expert output is PROSE, not a YAML block. When an area skill confirms a
+symptom it writes an analysis that:
+  - names the matched symptom_id verbatim (the literal id string from the
+    catalog, e.g. `fluentbit-oomkilled-tight-limit`),
+  - quotes the diagnostic evidence (verbatim command output / log lines),
+  - states the proposed fix in prose: what to change, why, the blast
+    radius, the exact rollback, and a confidence level.
+
+When no catalogue entry matches, the expert says so plainly (no fabricated
+symptom_id) and pastes a short diagnostic digest. This is a valid outcome;
+do not penalise it unless the rubric explicitly requires a confirmed
+symptom.
+
+The final remediation recommendation is likewise prose — there is no YAML
+`findings:` or `recommend:` block to look for. Judge by content: a check
+is satisfied when the correct symptom_id is named, the correct evidence is
+quoted, and the correct fix is proposed. A check is NOT failed merely
+because the output is prose rather than a structured block — but it IS
+failed if the substance (right symptom, right evidence, right fix) is
+missing or wrong.
+
+{{output}}
+
+# Output
+
+Return strict JSON. No prose outside the JSON. Schema:
+
+{
+  "pass": true | false,
+  "score": <number between 0 and 1, equal to passing_checks / total_checks>,
+  "reason": "<one short line summarising overall_pass and pass count, e.g. 'overall_pass=false (3/6 checks passed)'>",
+  "checks": [
+    {
+      "id": "<rubric check id>",
+      "pass": true | false,
+      "evidence": "<one short verbatim quote from the transcript, or '' if pass=false>"
+    }
+  ]
+}
+
+`pass` is true if and only if every entry in `checks` has `pass=true`.
+`score` is the fraction of checks that passed, between 0.0 and 1.0.
+The order of entries in `checks` MUST match the order in the rubric above.

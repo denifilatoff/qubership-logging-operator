@@ -1,0 +1,18 @@
+# symptoms.txt — deterministic catalog for fluentbit-troubleshoot.
+# One [<symptom-id>] section per known problem. A bare line is a
+# case-insensitive, whitespace-flexible phrase; an "re:" line is a raw regex.
+# Matched against the diagnostic-pass output (concatenated command stdout).
+# A match is a HINT — confirm against references/symptoms.md before using it.
+# Signal-less symptoms (Detection: manual in the .md) have NO section here.
+
+[fluentbit-connection-timeout-graylog]
+re: connection #-?\d+ to tcp://.*timed out
+re: getaddrinfo.*(Timeout|Name or service not known|nodename nor servname)
+no upstream connections available
+
+[fluentbit-configmap-parse-error]
+re: parse_error|ConfigParseError|unmatched end tag|Invalid (config|indentation)
+CrashLoopBackOff
+
+[fluentbit-oomkilled-tight-limit]
+OOMKilled

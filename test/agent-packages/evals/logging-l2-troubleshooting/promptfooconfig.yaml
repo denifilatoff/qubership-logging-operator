@@ -1,0 +1,80 @@
+description: L2 troubleshooting skill eval — cases generated, scenarios driven by hooks.
+
+tests: file://cases.js
+
+extensions:
+  - file://hooks.js:extensionHook
+
+# Serial: cases mutate one shared cluster. Never raise this above 1.
+evaluateOptions:
+  maxConcurrency: 1
+
+# The prompt text is injected per-case as a var by cases.js, because promptfoo
+# does not substitute per-test vars into a top-level file:// prompt path.
+prompts:
+  - "{{prompt_text}}"
+
+providers:
+  - id: anthropic:claude-agent-sdk
+    label: with-pkg
+    config:
+      model: claude-haiku-4-5
+      apiKeyRequired: false
+      # NB: the provider config key is `working_dir`, not `cwd`.
+      working_dir: .workdir/with-pkg
+      # Default with `working_dir` is read-only FS tools only; we need
+      # kubectl/Bash for live-cluster troubleshooting.
+      allow_all_tools: true
+  # To restore the with-pkg vs no-pkg A/B comparison, uncomment this provider.
+  # hooks.js already prepares .workdir/no-pkg (empty), so no other change is needed.
+  # - id: anthropic:claude-agent-sdk
+  #   label: no-pkg
+  #   config:
+  #     model: claude-haiku-4-5
+  #     apiKeyRequired: false
+  #     working_dir: .workdir/no-pkg
+  #     allow_all_tools: true
+
+defaultTest:
+  assert:
+    # llm-rubric's default rubric var is `{{ output }}` and it ONLY carries the
+    # agent's final assistant text — not tool calls. Reshape `output` via the
+    # transform so the judge sees a JSON document with the final text, the
+    # intermediate assistant messages (refute/recommend blocks emitted between
+    # Skill calls), and the tool-call array.
+    - type: llm-rubric
+      transform: |
+        const md = (context && context.metadata) || {};
+        const messages = md.messages || md.transcript || [];
+        const assistantTexts = messages
+          .filter(m => m && m.role === 'assistant')
+          .map(m => {
+            if (typeof m.content === 'string') return m.content;
+            if (Array.isArray(m.content)) {
+              return m.content
+                .filter(b => b && b.type === 'text')
+                .map(b => b.text)
+                .join('\n');
+            }
+            return JSON.stringify(m.content);
+          })
+          .filter(s => s && s.length > 0);
+        return JSON.stringify({
+          result: typeof output === 'string' ? output : JSON.stringify(output),
+          assistantMessages: assistantTexts,
+          toolCalls: md.toolCalls || []
+        }, null, 2);
+      provider:
+        id: anthropic:claude-agent-sdk
+        label: judge-claude-sonnet-4-6
+        config:
+          model: claude-sonnet-4-6
+          apiKeyRequired: false
+          custom_allowed_tools: []
+      rubricPrompt: file://judge-prompt.txt
+      # Name the score so it rolls up natively (prompts[].metrics.namedScores)
+      # instead of being parsed out of the judge's free-text reason.
+      metric: rubric
+    - type: skill-used
+      value: logging-l2-triage
+      metric: routing

@@ -1,0 +1,13 @@
+id: operator-helm-bad-image
+backend: victorialogs
+expected_area: none
+expected_recommend_kind: manual-diagnosis
+description: >
+  The logging-operator deployment was upgraded with a non-existent image
+  tag via `helm upgrade --reuse-values --set operatorImage=...`. Operator
+  pods are in ImagePullBackOff / ErrImagePull. This is a negative-case
+  fixture: the natural target area `logging-operator-troubleshoot` is not
+  shipped in this package, so triage must HAND BACK to the engineer with
+  the observation and NOT route to a nearby area-skill as a substitute.
+  Engineer-driven path: vague "logging is broken after our last deploy"
+  complaint.

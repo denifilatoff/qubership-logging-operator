@@ -1,0 +1,2 @@
+Some of our logs aren't making it into Graylog. A few services look almost
+empty while others are fine. Can you figure out what's going on?

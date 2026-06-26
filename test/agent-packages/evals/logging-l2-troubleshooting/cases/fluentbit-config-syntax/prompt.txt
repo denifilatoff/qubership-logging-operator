@@ -1,0 +1,2 @@
+Our logs just stopped. Nothing new is showing up in log search at all, and
+I have no idea why. Can you take a look?
