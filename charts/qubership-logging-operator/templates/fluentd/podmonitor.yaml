@@ -22,10 +22,7 @@ spec:
       # As fluentd worker increment port for sources with increments worker index
       # (port 24231 -> worker 1 -> port 24232)
       port: metrics
-    - interval: 30s
-      path: /metrics
-      port: reload-metrics
   selector:
     matchLabels:
-      app.kubernetes.io/component: fluentd
+      app.kubernetes.io/name: logging-fluentd
 {{- end }}

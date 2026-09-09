@@ -51,5 +51,5 @@ spec:
   jobLabel: k8s-app
   selector:
     matchLabels:
-      name: graylog
+      app.kubernetes.io/name: graylog-service
 {{- end }}

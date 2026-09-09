@@ -26,6 +26,13 @@ spec:
       path: /metrics
       port: reload-metrics
   selector:
-    matchLabels:
-      app.kubernetes.io/component: fluentbit
+    matchExpressions:
+      # Matches the standard FluentBit DaemonSet and both HA-mode workloads
+      # (forwarder DaemonSet and aggregator StatefulSet).
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - logging-fluentbit
+          - logging-fluentbit-forwarder
+          - logging-fluentbit-aggregator
 {{- end }}

@@ -50,3 +50,6 @@ jobs:
 
       - name: Test VictoriaLogs chart rendering
         run: scripts/chart-tests/test-victorialogs-rendering.sh
+
+      - name: Test monitoring selectors
+        run: scripts/chart-tests/test-monitoring-selectors.sh
