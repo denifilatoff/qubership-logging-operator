@@ -666,7 +666,7 @@ fluentd:
 
   # -- A docker image to use for fluent daemon set.
   # renovate: datasource=github-releases depName=Netcracker/qubership-fluentd versioning=loose
-  # dockerImage: ghcr.io/netcracker/qubership-fluentd:1.19.3-1
+  # dockerImage: ghcr.io/netcracker/qubership-fluentd:1.19.3-2
 
   # -- If specified, the pod's scheduling constraints. Ref: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#affinity-v1-core
   affinity: {}
